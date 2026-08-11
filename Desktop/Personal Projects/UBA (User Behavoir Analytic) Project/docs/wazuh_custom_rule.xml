@@ -1,0 +1,59 @@
+<!--
+  AI-UBA Alert Loopback :: Manager Custom Rules
+  =================================================
+  Bu faylı Wazuh MANAGER-də /var/ossec/etc/rules/local_rules.xml-ə əlavə edin.
+
+  Qeyd: Wazuh-un daxili JSON decoder-i (log_format=json ilə gələn) sahələri
+  avtomatik `data.*` altında çıxarır, ona görə AYRICA custom decoder YAZMAĞA
+  EHTİYAC YOXDUR - birbaşa rule yazmaq kifayətdir.
+
+  Tətbiq etdikdən sonra manager-i restart edin:
+    systemctl restart wazuh-manager
+
+  Test üçün:
+    /var/ossec/bin/wazuh-logtest
+    (və ya) echo '{"source":"AI-UBA","severity":"high",...}' faylına yazıb
+    /var/ossec/logs/alerts/alerts.json-da nəticəni yoxlayın.
+-->
+<group name="aiuba,user_behavior_analytics,">
+
+  <!-- Baza qaydası: bütün AI-UBA mənşəli event-ləri tanı (özü alert yaratmır, yalnız əsasdır) -->
+  <rule id="100200" level="0">
+    <field name="source">AI-UBA</field>
+    <description>AI-UBA: user behavior anomaly event alındı</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- Aşağı risk -->
+  <rule id="100201" level="5">
+    <if_sid>100200</if_sid>
+    <field name="severity">low</field>
+    <description>AI-UBA: Aşağı risk davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <group>low_risk,</group>
+  </rule>
+
+  <!-- Orta risk -->
+  <rule id="100202" level="8">
+    <if_sid>100200</if_sid>
+    <field name="severity">medium</field>
+    <description>AI-UBA: Orta risk davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <group>medium_risk,</group>
+  </rule>
+
+  <!-- Yüksək risk -->
+  <rule id="100203" level="12">
+    <if_sid>100200</if_sid>
+    <field name="severity">high</field>
+    <description>AI-UBA: Yüksək risk davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <group>high_risk,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- Kritik risk (məs: data exfiltration şübhəsi) -->
+  <rule id="100204" level="15">
+    <if_sid>100200</if_sid>
+    <field name="severity">critical</field>
+    <description>AI-UBA: KRİTİK davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <group>critical_risk,gdpr_IV_35.7.d,</group>
+  </rule>
+
+</group>
