@@ -1,0 +1,39 @@
+# AI-UBA configuration file
+# Environment variable overrides:
+#   AIUBA_<SECTION>__<KEY>
+#   For example: AIUBA_PARSER__MODE=live
+
+environment: development
+
+parser:
+  mode: offline              # "offline" (from EVTX files) or "live" (real-time Windows API)
+  channels:
+    - "Security"
+    - "Microsoft-Windows-Sysmon/Operational"
+  poll_interval_seconds: 5
+  evtx_input_dir: "data/evtx"
+  parsed_output_dir: "data/parsed"
+
+logging:
+  level: INFO
+  log_file: "logs/aiuba.log"
+  max_bytes: 10485760
+  backup_count: 5
+
+wazuh_indexer:
+  host: "127.0.0.1"       # Wazuh Indexer/manager IP address
+  port: 9200
+  username: "admin"
+  password: ""            # DO NOT COMMIT THIS! Use export AIUBA_WAZUH_INDEXER__PASSWORD=... instead
+  verify_ssl: false        # for self-signed certificates; default is False; should be True in production
+  index_pattern: "wazuh-alerts-*"
+
+wazuh_alert_output:
+  output_file: "data/aiuba_alerts/aiuba_events.json"
+
+risk:
+  rule_weight: 0.6
+  ml_weight: 0.4
+  low_threshold: 30
+  medium_threshold: 60
+  high_threshold: 85

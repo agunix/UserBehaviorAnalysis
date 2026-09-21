@@ -1,0 +1,21 @@
+<!--
+  AI-UBA Alert Loopback :: Agent configuration for Wazuh AGENT
+  ==================================================
+  Locate the Wazuh AGENT's ossec.conf file on the machine where AI-UBA is running
+  (Windows: C:\Program Files (x86)\ossec-agent\ossec.conf,
+   Linux:   /var/ossec/etc/ossec.conf).
+
+  <location> in path src/config/config.yaml and wazuh_alert_output.output_file
+  values must be the same.
+
+  After adding restart the Wazuh AGENT service to apply the changes:
+    Windows: Restart-Service -Name WazuhSvc
+    Linux:   systemctl restart wazuh-agent
+-->
+<ossec_config>
+  <localfile>
+    <log_format>json</log_format>
+    <location>C:\AI-UBA\data\aiuba_alerts\aiuba_events.json</location>
+    <!-- Alternative for Linux: <location>/opt/AI-UBA/data/aiuba_alerts/aiuba_events.json</location> -->
+  </localfile>
+</ossec_config>
