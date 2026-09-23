@@ -10,40 +10,96 @@ Status: 🟡 In Development
 
 ## Architecture
 
-User Activity
-      ↓
-UBA Detection
-      ↓
-SIEM
-      ↓
-AI Agent
-      ↓
-XDR Correlation
-      ↓
-EDR + IPS
-      ↓
-Incident Analysis
-      ↓
-SOAR
+                    ┌─────────────────────┐
+                    │   User Activity     │
+                    │ Windows / Linux     │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │                 UBA Detection              │
+                    │                Behavioral Rules            │
+                    └──────────┬──────────┘
+                                                 │
+                                                ▼
+                    ┌─────────────────────┐
+                    │                      Wazuh                      │
+                    │                       SIEM                        │
+                    └──────────┬──────────┘
+                                                 │
+                                                ▼
+                    ┌─────────────────────┐
+                    │                    AI Agent                     │
+                    │                 Investigation                 │
+                    └──────────┬──────────┘
+                                                │
+                    ┌──────────┴──────────┐
+                    ▼                                                      ▼
+             ┌─────────────┐       ┌─────────────┐
+             │              XDR             │       │             SIEM             │
+             │         Correlation       │       │           Context           │
+             └──────┬──────┘       └──────┬──────┘
+                    │                                                       │
+                    └──────────┬──────────┘
+                                                ▼
+                    ┌─────────────────────┐
+                    │                 Incident Analysis           │
+                    └──────────┬──────────┘
+                                                ▼
+                    ┌─────────────────────┐
+                    │                         SOAR                     │
+                    │                Response / Enrich           │
+                    └─────────────────────┘
 
 This project is currently under active development. Features and architecture may change.
 
-## Current Development
+## Implemented
 
-The current development focuses on:
+- Wazuh UBA alert ingestion
+- UBA alert parsing
+- SIEM event normalization
+- Security event correlation
+- Initial investigation workflow
 
-- User behavior analysis
-- Behavioral anomaly detection
-- SIEM event analysis
-- AI-assisted alert investigation
-- Cross-source security event correlation
-- XDR/EDR/IPS evidence correlation
-- Incident summarization
+## In progress
 
-### Planned
+- AI investigation agent
+- XDR correlation
+- Incident analysis
+
+## Planned
 
 - SOAR integration
 - Automated enrichment
 - Automated response
 - Detection feedback loop
 - False-positive reduction
+
+## Project structure
+
+UserBehaviorAnalysis/
+│
+├── src/
+│   ├── api/
+│   ├── ai-agent/
+│   ├── correlation/
+│   ├── detection-engine/
+│   ├── incident-analysis/
+│   ├── integrations/
+│   └── features/
+│
+├── docs/
+│   ├── architecture/
+│   ├── detection/
+│   ├── integration/
+│   └── investigation/
+│
+├── config.py
+├── config.yaml
+├── parser.py
+├── utils.py
+├── requirements.txt
+├── ROADMAP.md
+├── SECURITY.md
+├── LICENSE
+└── README.md
