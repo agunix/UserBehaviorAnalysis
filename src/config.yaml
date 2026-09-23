@@ -25,11 +25,11 @@ logging:
 
 wazuh_indexer:
 
-  host: "127.0.0.1"       # Wazuh Indexer/manager IP
+  host: ${WAZUH_HOST}       
   port: 9200
-  username: "admin"
-  password: ""            # DO NOT WRITE HERE! use and export UBA_WAZUH_INDEXER__PASSWORD=...
-  verify_ssl: false        # self-signed certificate false, for production is true
+  username: ${WAZUH_USERNAME}
+  password: ${WAZUH_PASSWORD}
+  verify_ssl: false       
 
   index_pattern: "wazuh-alerts-*"
 
