@@ -1,50 +1,26 @@
 """
 AI-UBA :: Wazuh Integration
 ------------------------------
-
-Consisting of two main components:
-
-1. WazuhIndexerClient
-   From Wazuh Indexer (OpenSearch, port 9200, Basic Auth) `wazuh-alerts-*` to index
-   on a Sysmon/Security getting alerts to `UserBehaviorEvent`
-   scheme (look: src/parser/parser.py) mapping.
-
-   NOTE: Wazuh Manager API (port 55000, JWT) there are NOT USING, because the 
-   Wazuh Manager API is not designed for bulk alert retrieval, and
-   1) it is slower than Indexer (OpenSearch) queries, and
-   2) it is limited to the last 1000 alerts (default `alerts.limit`), and
-   3) it is not suitable for historical data retrieval (e.g., for model training).
-
-2. WazuhAlertWriter
-  To "inject" the anomalies detected by AI-UBA back into Wazuh: Since Wazuh's official 
-  `POST /events` endpoint is currently unstable (and is being phased out in the official 
-  repository), we use a documented and reliable method: the JSON string is written to 
-  a local file, the Wazuh agent monitors this file using `<localfile><log_format>json</log_format></localfile>`, 
-  and a custom decoder and rule on the manager convert it into an alert. See: `docs wazuh_agent_localfile.xml` 
-  and `docs/wazuh_custom_rule.xml`.
-Usage example (for debugging):
-
-It consists of two main components:
+İki əsas komponentdən ibarətdir:
 
 1. WazuhIndexerClient
-   It fetches Sysmon/Security alerts from the `wazuh-alerts-*` index 
-   on the Wazuh Indexer (OpenSearch, port 9200, Basic Auth) and
-    maps them to the existing `UserBehaviorEvent` schema 
-    (see: src/parser/parser.py).
+   Wazuh Indexer-dən (OpenSearch, port 9200, Basic Auth) `wazuh-alerts-*` index-i
+   üzərindən Sysmon/Security alert-lərini çəkir və mövcud `UserBehaviorEvent`
+   sxeminə (bax: src/parser/parser.py) map edir.
 
-  NOTE: The Wazuh Manager API (port 55000, JWT) is NOT used here, because
-  alerts are stored in the indexer, not the manager.
+   QEYD: Wazuh Manager API-si (port 55000, JWT) burada İSTİFADƏ OLUNMUR, çünki
+   alert-lər manager-də deyil, indexer-də saxlanılır.
 
 2. WazuhAlertWriter
-    To "inject" anomalies detected by AI-UBA back into Wazuh. 
-    Wazuh's official `POST /events` endpoint is currently unstable (it is
-    being phased out in Wazuh's own repository), so we use a documented and
-    reliable method: a JSON string is written to a local file, the Wazuh agent
-    monitors this file using `<localfile><log_format>json</log_format></localfile>`,
-    and a custom decoder and rule on the manager convert it into an alert. 
-    See: docs/wazuh_agent_localfile.xml and docs/wazuh_custom_rule.xml
+   AI-UBA-nın öz aşkarladığı anomaliyaları geri Wazuh-a "inject" etmək üçün.
+   Wazuh-un rəsmi `POST /events` endpoint-i hazırda qeyri-stabildir (Wazuh-un
+   öz repo-sunda silinmə mərhələsindədir), ona görə sənədləşdirilmiş və etibarlı
+   üsuldan istifadə edirik: JSON sətri lokal fayla yazılır, Wazuh agent bu faylı
+   `<localfile><log_format>json</log_format></localfile>` ilə izləyir, manager-də
+   isə custom decoder+rule bunu alert-ə çevirir.
+   Bax: docs/wazuh_agent_localfile.xml və docs/wazuh_custom_rule.xml
 
-Example usage (for debugging):
+İstifadə nümunəsi:
     from src.integrations.wazuh_client import WazuhIndexerClient, WazuhAlertWriter
 
     client = WazuhIndexerClient()
@@ -53,11 +29,11 @@ Example usage (for debugging):
 
     writer = WazuhAlertWriter()
     writer.write_alert(
-        user="CORP\\someone.smith",
+        user="CORP\\agaverdi.k",
         rule_name="AIUBA_AnomalousLoginTime",
         severity="high",
         risk_score=87.5,
-        description="The user logged in outside of normal working hours.",
+        description="İstifadəçi adi iş saatlarından kənar giriş etdi",
         details={"logon_hour": 3, "baseline_hours": [8, 18]},
     )
 """
@@ -73,19 +49,14 @@ from typing import Any, Dict, Iterator, List, Optional
 import requests
 from requests.auth import HTTPBasicAuth
 
-
 from src.config.config import get_settings
-
-from src.config import get_settings
 from src.parser.parser import UserBehaviorEvent, normalize_event
 from src.parser.utils import get_event_metadata, normalize_timestamp, safe_get
 
 logger = logging.getLogger("aiuba.wazuh_client")
 
-
-# Suppress urllib3 self-signed certificate warnings (for test environments only;
-# use verify_ssl=True in production and remove this line).
-
+# urllib3-ün self-signed sertifikat xəbərdarlıqlarını sussuzlaşdır (yalnız test mühiti üçün;
+# production-da verify_ssl=True istifadə edin və bu sətri silin).
 try:
     import urllib3
 
@@ -95,18 +66,16 @@ except ImportError:
 
 
 # --------------------------------------------------------------------------- #
-
-# Wazuh alert JSON -> UserBehaviorEvent mapping
+# Wazuh alert JSON -> UserBehaviorEvent map edilməsi
 # --------------------------------------------------------------------------- #
-# The Wazuh Windows/Sysmon decoder stores raw EVTX fields under `data.win.eventdata.*`,
-# primarily in camelCase format (starting with a lowercase letter). System fields
-# are located under `data.win.system.*`. To ensure compatibility with the names
-# found in EVTX XML, we perform case-insensitive searches, making the process
-# resilient to minor differences between Wazuh versions.
-
+# Wazuh-un Windows/Sysmon decoder-i xam EVTX sahələrini `data.win.eventdata.*`
+# altında, əsasən camelCase (ilk hərf kiçik) formatda saxlayır. Sistem sahələri
+# isə `data.win.system.*` altındadır. EVTX XML-dəki adlarla uyğunluq üçün
+# case-insensitive axtarış aparırıq ki, Wazuh versiyaları arasındakı kiçik
+# fərqlərə qarşı dayanıqlı olsun.
 
 def _ci_get(d: Dict[str, Any], *keys: str) -> Optional[str]:
-    """Case-insensitive key search. Turns first keys to lowercase for comparison."""
+    """Case-insensitive açar axtarışı. Birinci tapılan qeyri-boş dəyəri qaytarır."""
     if not d:
         return None
     lowered = {k.lower(): v for k, v in d.items()}
@@ -119,9 +88,9 @@ def _ci_get(d: Dict[str, Any], *keys: str) -> Optional[str]:
 
 def wazuh_alert_to_user_behavior_event(alert: Dict[str, Any]) -> Optional[UserBehaviorEvent]:
     """
-    Maps a single Wazuh alert document (from the indexer _search result `_source`)
-    to a `UserBehaviorEvent`. Returns None for alerts not originating from Sysmon/Security sources
-    (i.e., when `data.win` is not present).
+    Tək bir Wazuh alert sənədini (indexer _search nəticəsindəki `_source`)
+    `UserBehaviorEvent`-ə çevirir. Sysmon/Security mənşəli olmayan alert-lər
+    üçün None qaytarır (data.win yoxdursa).
     """
     data = alert.get("data", {}) or {}
     win = data.get("win", {}) or {}
@@ -130,8 +99,7 @@ def wazuh_alert_to_user_behavior_event(alert: Dict[str, Any]) -> Optional[UserBe
 
     raw_event_id = _ci_get(system, "eventID")
     if raw_event_id is None:
-
-        return None  # Not a Sysmon/Security (e.g., Linux auth, firewall etc.)
+        return None  # Sysmon/Security mənşəli deyil (məs. Linux auth, firewall və s.)
 
     try:
         event_id = int(raw_event_id)
@@ -143,9 +111,6 @@ def wazuh_alert_to_user_behavior_event(alert: Dict[str, Any]) -> Optional[UserBe
     raw_ts = _ci_get(system, "systemTime") or alert.get("timestamp")
     computer = _ci_get(system, "computer") or (alert.get("agent") or {}).get("name")
     record_id_raw = _ci_get(system, "eventRecordID")
-
-
-    # The same logic as _FIELD_ALIASES , just source `eventdata` is dict
 
     # _FIELD_ALIASES ilə eyni məntiq, sadəcə mənbə `eventdata` dict-idir
     field_map = {
@@ -188,8 +153,7 @@ def wazuh_alert_to_user_behavior_event(alert: Dict[str, Any]) -> Optional[UserBe
 # --------------------------------------------------------------------------- #
 
 class WazuhIndexerClient:
-
-    """Request client for fetching alerts from Wazuh Indexer (OpenSearch)."""
+    """Wazuh Indexer-dən (OpenSearch) alert sorğulayan client."""
 
     def __init__(self, settings=None):
         self.settings = settings or get_settings()
@@ -216,18 +180,12 @@ class WazuhIndexerClient:
         size: int = 1000,
     ) -> Iterator[UserBehaviorEvent]:
         """
-        Fetches recent Windows/Sysmon alerts from the Wazuh Indexer and normalizes them to UserBehaviorEvent objects.
+        Son `minutes` dəqiqə ərzindəki Windows/Sysmon alert-lərini çəkir və
+        UserBehaviorEvent-ə normallaşdırır.
 
-        NOT: Wazuh indexer queries are limited to a maximum of 10,000 results by default
-        (index.max_result_window). For larger time ranges, use `fetch_events_paginated`.
-
-        It retrieves Windows/Sysmon alerts from the last `minutes`
-        minutes and normalizes them into UserBehaviorEvents.
-
-        NOTE: Wazuh indexer queries are limited to a maximum of 10,000 results by default
-        (index.max_result_window). For large time ranges,
-        use `fetch_events_paginated`.
-
+        NOT: Wazuh indexer sorğuları defolt olaraq maksimum 10.000 nəticə ilə
+        məhdudlaşır (index.max_result_window). Böyük vaxt aralıqları üçün
+        `fetch_events_paginated`-dan istifadə edin.
         """
         event_ids = event_ids or self.settings.parser.included_event_ids
         now = datetime.now(timezone.utc)
@@ -248,8 +206,7 @@ class WazuhIndexerClient:
 
         result = self._search(query)
         hits = result.get("hits", {}).get("hits", [])
-
-        logger.info("There are %d alerts fetched from Wazuh indexer (last %d mins)", len(hits), minutes)
+        logger.info("Wazuh indexer-dən %d alert alındı (son %d dəq)", len(hits), minutes)
 
         for hit in hits:
             source = hit.get("_source", {})
@@ -264,11 +221,9 @@ class WazuhIndexerClient:
         event_ids: Optional[List[int]] = None,
         page_size: int = 1000,
     ) -> Iterator[UserBehaviorEvent]:
-
         """
-        `search_after` based pagination query — to exceed the 10,000 result limit.
-        Use for fetching large time ranges (e.g., 30 days for model training).
-
+        `search_after` ilə səhifələnən sorğu — 10.000 limitini keçmək üçün.
+        Böyük tarixi aralıqları (məs. modelin train edilməsi üçün 30 gün) çəkərkən istifadə edin.
         """
         event_ids = event_ids or self.settings.parser.included_event_ids
         search_after = None
@@ -302,24 +257,21 @@ class WazuhIndexerClient:
 
 
 # --------------------------------------------------------------------------- #
-
-# WazuhAlertWriter - Injecting AI-UBA anomalies back into Wazuh
-
+# WazuhAlertWriter - AI-UBA anomaliyalarını geri Wazuh-a inject etmək
 # --------------------------------------------------------------------------- #
 
 class WazuhAlertWriter:
     """
-    Injects AI-UBA detected anomalies back into Wazuh as JSON strings
-    into a local file. This file should be monitored by the Wazuh agent's `localfile` (log_format=json)
-    configuration so that the manager can convert it into an alert using a custom rule.
+    AI-UBA risk_engine tərəfindən aşkarlanan anomaliyaları JSON sətri kimi
+    lokal fayla yazır. Bu fayl Wazuh agent-in `localfile` (log_format=json)
+    ilə izlədiyi fayl olmalıdır ki, manager-də custom rule bunu alert-ə çevirsin.
 
-    Setup steps (one-time):
-    1. Define the `output_file` path on the machine where this script runs
-    (usually on the Wazuh agent itself or in a shared location accessible to the agent). 
-    2. Refer to the agent's `ossec.conf`: docs/wazuh_agent_localfile.xml
-    3. Refer to the manager's `local_rules.xml`: docs/wazuh_custom_rule.xml
-    4. Restart the manager and test using `wazuh-logtest`.
-
+    Qurulum addımları (bir dəfəlik):
+      1. Bu skriptin işlədiyi maşında (adətən Wazuh agent-in özündə və ya
+         agent-in oxuya biləcəyi paylaşılan yerdə) `output_file` yolunu təyin edin.
+      2. Agent-in ossec.conf-una bax: docs/wazuh_agent_localfile.xml
+      3. Manager-in local_rules.xml-inə bax: docs/wazuh_custom_rule.xml
+      4. Manager-i restart edin, `wazuh-logtest` ilə test edin.
     """
 
     def __init__(self, settings=None):
@@ -337,9 +289,8 @@ class WazuhAlertWriter:
         details: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Injects a detected anomaly alert into a local file as a JSON string.
-        `severity`: "low" | "medium" | "high" | "critical" (corresponding to risk_engine thresholds)
-
+        Bir anomaliya alert-ini JSON sətri kimi fayla append edir.
+        `severity`: "low" | "medium" | "high" | "critical" (risk_engine threshold-larına uyğun)
         """
         payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -357,18 +308,14 @@ class WazuhAlertWriter:
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
         logger.info(
-
-            "AI-UBA alert injected: user=%s rule=%s severity=%s score=%.2f",
-
+            "AI-UBA alert yazıldı: user=%s rule=%s severity=%s score=%.2f",
             user, rule_name, severity, risk_score,
         )
         return payload
 
 
 # --------------------------------------------------------------------------- #
-
-# CLI entry point (for debugging)
-
+# CLI test giriş nöqtəsi
 # --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
@@ -380,6 +327,4 @@ if __name__ == "__main__":
         count += 1
         if count <= 5:
             print(evt.model_dump_json(indent=2))
-
-    print(f"\nTotal normalized events: {count}")
-
+    print(f"\nCəmi normallaşdırılan event: {count}")

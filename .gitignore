@@ -1,40 +1,11 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-*.egg
-dist/
-build/
-.eggs/
-
-# Virtual environments
 venv/
-.venv/
-env/
-ENV/
-
-# Test / cache
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Config / secrets 
+__pycache__/
+*.pyc
 .env
-.env.*
-*.local.yaml
-secrets.yaml
-**/config.local.yaml
-
-# Logs / data
-data/
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
 *.evtx
-*.log
-logs/
-
-# IDE / OS
 .vscode/
 .idea/
-.DS_Store
-Thumbs.db

@@ -1,22 +1,19 @@
 """
 AI-UBA :: Windows Event Log Parser
 -------------------------------------
+Bu modul iki rejimdə işləyir:
 
-This module provides a unified interface to parse Windows Event Logs from two sources:
+  1. OFFLINE  - `data/evtx/` qovluğundakı .evtx fayllarını (python-evtx ilə) oxuyur.
+                Server/analitik olmayan mühitlərdə də (Linux/macOS daxil) işləyir,
+                çünki python-evtx faylı bytecode səviyyəsində parse edir, Windows API tələb etmir.
 
-  1. 1. OFFLINE – Reads .evtx files from the `data/evtx/` folder (using python-evtx). 
-                           It works in non-server/non-analytical environments (including Linux/macOS)
-                           because python-evtx parses the file at the bytecode level and does not require 
-                           the Windows API.
+  2. LIVE     - Windows sistemində real-vaxt rejimində `pywin32` (win32evtlog) vasitəsilə
+                Security və Sysmon kanallarını izləyir. Yalnız Windows-da işləyir.
 
-  2. LIVE            - Monitors Security and Sysmon channels in real-time on Windows systems
-                           using `pywin32` (win32evtlog). Works only on Windows.
+Hər iki rejimdən çıxan xam event-lər eyni `UserBehaviorEvent` sxeminə normallaşdırılır ki,
+sonrakı `features/feature_extractor.py` modulu mənbədən asılı olmadan işləyə bilsin.
 
-Raw events from both modes are normalized to the same `UserBehaviorEvent` schema so that 
-the subsequent `features/feature_extractor.py` module can operate independently of the source.
-
-Example usage:
-
+İstifadə nümunəsi:
     from src.parser.parser import WindowsEventLogParser
 
     parser = WindowsEventLogParser()
@@ -35,7 +32,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 from pydantic import BaseModel, Field
 
-from src.config import get_settings
+from src.config.config import get_settings
 from src.parser.utils import (
     get_event_metadata,
     safe_get,
@@ -46,16 +43,13 @@ logger = logging.getLogger("aiuba.parser")
 
 
 # --------------------------------------------------------------------------- #
-
-# Normalized Event Schema
-
+# Normallaşdırılmış Event Sxemi
 # --------------------------------------------------------------------------- #
 
 class UserBehaviorEvent(BaseModel):
     """
-
-    Unified event schema independent of the source (Security / Sysmon, offline / live).
-
+    Mənbədən (Security / Sysmon, offline / live) asılı olmayan vahid event sxemi.
+    feature_extractor.py və risk_engine.py yalnız bu sxem üzərində işləyir.
     """
 
     event_id: int
@@ -66,9 +60,7 @@ class UserBehaviorEvent(BaseModel):
     computer: Optional[str] = None
     record_id: Optional[int] = None
 
-
-    # Normalized fields for behavioral analysis
-
+    # Davranış analitikası üçün ən çox istifadə olunan normallaşdırılmış sahələr
     user: Optional[str] = None
     domain: Optional[str] = None
     logon_id: Optional[str] = None
@@ -84,23 +76,19 @@ class UserBehaviorEvent(BaseModel):
     destination_port: Optional[str] = None
     dns_query: Optional[str] = None
 
+    target_object: Optional[str] = None   # registry/persistence event-lər üçün
+    target_filename: Optional[str] = None  # filesystem event-lər üçün
 
-    target_object: Optional[str] = None   # for registry/persistence events
-    target_filename: Optional[str] = None  # for filesystem events
-
-    # Unnormalized remaining fields (kept for audit/debug purposes)
-
+    # Normallaşdırılmamış qalan bütün sahələr (audit/debug üçün saxlanılır)
     raw: Dict[str, Any] = Field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------- #
-
-# Function to map raw event_data to UserBehaviorEvent
+# Xam event_data-nı UserBehaviorEvent-ə map edən funksiya
 # --------------------------------------------------------------------------- #
 
-# Different event IDs may have the same meaning for certain fields, but with different names.
-# This dictionary maps each normalized field to a list of possible source keys.
-
+# Fərqli event ID-lərdə eyni məna daşıyan sahələr fərqli adlar altında gəlir.
+# Bu lüğət hər normallaşdırılmış sahə üçün mümkün mənbə açarlarının siyahısını saxlayır.
 _FIELD_ALIASES: Dict[str, List[str]] = {
     "user": ["TargetUserName", "SubjectUserName", "User"],
     "domain": ["TargetDomainName", "SubjectDomainName"],
@@ -118,10 +106,9 @@ _FIELD_ALIASES: Dict[str, List[str]] = {
     "target_filename": ["TargetFilename"],
 }
 
+
 def normalize_event(raw_event: Dict[str, Any]) -> UserBehaviorEvent:
-
-    """Converts the output of `xml_event_to_dict` to a `UserBehaviorEvent`."""
-
+    """Bir `xml_event_to_dict` çıxışını `UserBehaviorEvent`-ə çevirir."""
     event_id = raw_event["event_id"]
     meta = get_event_metadata(event_id)
     event_data = raw_event.get("event_data", {})
@@ -146,6 +133,7 @@ def normalize_event(raw_event: Dict[str, Any]) -> UserBehaviorEvent:
         **normalized_fields,
     )
 
+
 # --------------------------------------------------------------------------- #
 # Parser
 # --------------------------------------------------------------------------- #
@@ -159,12 +147,11 @@ class ParseStats:
     events_failed: int = 0
     errors: List[str] = field(default_factory=list)
 
+
 class WindowsEventLogParser:
     """
-
-    Parses EVTX files (offline) or live Windows Event Log (live, Windows only)
-    and creates a stream of normalized `UserBehaviorEvent` objects.
-
+    EVTX fayllarını (offline) və ya canlı Windows Event Log-u (live, yalnız Windows)
+    oxuyub normallaşdırılmış `UserBehaviorEvent` axını yaradır.
     """
 
     def __init__(self, settings=None):
@@ -172,23 +159,19 @@ class WindowsEventLogParser:
         self.stats = ParseStats()
 
     # ------------------------------------------------------------------ #
-
-    # OFFLINE mode (.evtx files)
-
+    # OFFLINE rejim (.evtx faylları)
     # ------------------------------------------------------------------ #
 
     def parse_evtx_file(self, file_path: Path) -> Iterator[UserBehaviorEvent]:
         """
-
-        Parses a single .evtx file line by line (lazy).
-        `python-evtx` library is required: pip install python-evtx
+        Tək bir .evtx faylını sətir-sətir (lazy) oxuyur.
+        `python-evtx` kitabxanası tələb olunur: pip install python-evtx
         """
         try:
-            from evtx.Evtx import Evtx  # python-evtx package
+            from Evtx.Evtx import Evtx  # python-evtx paketi
         except ImportError as exc:
             raise ImportError(
-                "python-evtx package not found. Please install it: pip install python-evtx"
-
+                "python-evtx paketi tapılmadı. Quraşdırın: pip install python-evtx"
             ) from exc
 
         included_ids = set(self.settings.parser.included_event_ids)
@@ -209,61 +192,52 @@ class WindowsEventLogParser:
                         self.stats.events_kept += 1
                         yield event
 
-
-                    except Exception as exc:  # noqa: BLE001 - do not let a single record error halt the entire file
+                    except Exception as exc:  # noqa: BLE001 - tək record xətası bütün faylı dayandırmasın
                         self.stats.events_failed += 1
                         self.stats.errors.append(f"{file_path.name}#{record.offset()}: {exc}")
-                        logger.warning("Event parse error (%s): %s", file_path.name, exc)
+                        logger.warning("Event parse xətası (%s): %s", file_path.name, exc)
                         continue
 
         except Exception as exc:
-            logger.error("EVTX cannot open: %s -> %s", file_path, exc)
+            logger.error("EVTX fayl açıla bilmədi: %s -> %s", file_path, exc)
             self.stats.errors.append(f"{file_path.name}: {exc}")
             return
 
         self.stats.files_processed += 1
 
     def parse_directory(self, directory: Optional[Path] = None) -> Iterator[UserBehaviorEvent]:
-
-        """It sequentially parses all .evtx files in the `evtx_input_dir` folder."""
-
+        """`evtx_input_dir` qovluğundakı bütün .evtx fayllarını ardıcıl parse edir."""
         directory = directory or self.settings.parser.evtx_input_dir
         directory = Path(directory)
 
         if not directory.exists():
-
-            logger.warning("EVTX input directory does not exist: %s", directory)
-
+            logger.warning("EVTX input qovluğu mövcud deyil: %s", directory)
             return
 
         evtx_files = sorted(directory.glob("*.evtx"))
         if not evtx_files:
-
-            logger.info("No .evtx files found in directory: %s", directory)
+            logger.info("Qovluqda .evtx fayl tapılmadı: %s", directory)
             return
 
         for file_path in evtx_files:
-            logger.info("Parsing: %s", file_path.name)
+            logger.info("Parse edilir: %s", file_path.name)
             yield from self.parse_evtx_file(file_path)
 
     # ------------------------------------------------------------------ #
-    # LIVE mode (Windows only, pywin32)
-
+    # LIVE rejim (yalnız Windows, pywin32)
     # ------------------------------------------------------------------ #
 
     def stream_live(self, channel: Optional[str] = None) -> Iterator[UserBehaviorEvent]:
         """
-
-        Streams Windows Event Log entries in real-time.
-        Only works on Windows systems with `pywin32` installed.
+        Windows Event Log-u real-vaxt rejimində izləyir.
+        Yalnız Windows sistemində, `pywin32` quraşdırılmış olduqda işləyir.
         """
         try:
-            import win32evtlog  # pywin32 package
+            import win32evtlog  # pywin32 paketi
         except ImportError as exc:
             raise ImportError(
-                "pywin32 package not found (only available on Windows). "
-                "Install it: pip install pywin32"
-
+                "pywin32 paketi tapılmadı (yalnız Windows-da mövcuddur). "
+                "Quraşdırın: pip install pywin32"
             ) from exc
 
         channels = [channel] if channel else self.settings.parser.channels
@@ -278,11 +252,9 @@ class WindowsEventLogParser:
                     SignalEvent=None,
                 )
                 handles.append((ch, h))
-
-                logger.info("Live streaming started: %s", ch)
+                logger.info("Canlı izləmə başladıldı: %s", ch)
             except Exception as exc:
-                logger.error("Failed to subscribe to channel (%s): %s", ch, exc)
-
+                logger.error("Kanala abunə olunmadı (%s): %s", ch, exc)
 
         while True:
             for ch, handle in handles:
@@ -305,17 +277,15 @@ class WindowsEventLogParser:
 
                     except Exception as exc:  # noqa: BLE001
                         self.stats.events_failed += 1
-
-                        logger.warning("Live event parse error (%s): %s", ch, exc)
+                        logger.warning("Canlı event parse xətası (%s): %s", ch, exc)
                         continue
 
     # ------------------------------------------------------------------ #
-    # Single entry point
+    # Vahid giriş nöqtəsi
     # ------------------------------------------------------------------ #
 
     def parse_all(self) -> Iterator[UserBehaviorEvent]:
-        """Selects offline/live mode based on the `parser.mode` value in `config.yaml`."""
-
+        """`config.yaml`-dakı `parser.mode` dəyərinə görə offline/live rejimi seçir."""
         if self.settings.parser.mode == "live":
             yield from self.stream_live()
         else:
@@ -327,10 +297,8 @@ class WindowsEventLogParser:
 
     def persist(self, events: Iterator[UserBehaviorEvent]) -> Path:
         """
-
-        Writes normalized events in `parsed_output_dir/YYYY-MM-DD.jsonl` format.
-        The subsequent feature extraction step will read these files.
-
+        Normallaşdırılmış event-ləri `parsed_output_dir/YYYY-MM-DD.jsonl` formatında yazır.
+        Sonrakı feature extraction mərhələsi bu faylları oxuyacaq.
         """
         output_dir = self.settings.parser.parsed_output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -342,14 +310,12 @@ class WindowsEventLogParser:
                 f.write(event.model_dump_json() + "\n")
                 count += 1
 
-
-        logger.info("Written: %d events -> %s", count, out_path)
-
+        logger.info("Yazıldı: %d event -> %s", count, out_path)
         return out_path
 
 
 # --------------------------------------------------------------------------- #
-# CLI test entry point (for debugging)
+# CLI test giriş nöqtəsi
 # --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
@@ -358,9 +324,9 @@ if __name__ == "__main__":
     parser = WindowsEventLogParser()
     output_file = parser.persist(parser.parse_directory())
 
-    print(f"Files: {parser.stats.files_processed}")
-    print(f"Events read: {parser.stats.events_read}")
-    print(f"Events kept (filtered): {parser.stats.events_kept}")
-    print(f"Events skipped (filtered): {parser.stats.events_skipped_filtered}")
-    print(f"Failed events: {parser.stats.events_failed}")
-    print(f"Output file: {output_file}")
+    print(f"Fayllar: {parser.stats.files_processed}")
+    print(f"Oxunan event-lər: {parser.stats.events_read}")
+    print(f"Saxlanılan (filter keçən) event-lər: {parser.stats.events_kept}")
+    print(f"Filtrlənib atılan: {parser.stats.events_skipped_filtered}")
+    print(f"Uğursuz: {parser.stats.events_failed}")
+    print(f"Çıxış faylı: {output_file}")

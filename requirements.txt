@@ -1,21 +1,17 @@
-# UserBehaviorAnalysis - Runtime Dependencies
-# Python 3.10+ recommended
-
-# Configuration / data validation
+# --- Config ---
 pydantic>=2.6
 PyYAML>=6.0
 
-# Windows Event Log parsing
-python-evtx>=0.7.4
-pywin32>=306; sys_platform == "win32"
+# --- Parser (Windows Event Log) ---
+python-evtx>=0.7.4        # offline .evtx fayl parsing (platformadan asılı deyil)
+pywin32>=306; sys_platform == "win32"   # live rejim üçün, yalnız Windows-da quraşdırılır
 
-# Wazuh / OpenSearch REST integration
-requests>=2.31
-urllib3>=2.0
+# --- Wazuh Integration ---
+requests>=2.31            # Wazuh Indexer (OpenSearch) REST sorğuları üçün
+urllib3>=2.0               # self-signed sertifikat xəbərdarlıqlarının idarəsi üçün
 
-# Optional / planned modules
-# Uncomment when the corresponding components are enabled:
-# scikit-learn>=1.4
-# fastapi>=0.110
+# --- Gələcək modullar üçün (artıq strukturda nəzərdə tutulub) ---
+# scikit-learn>=1.4        # model/train.py, model/predict.py (Isolation Forest və s.)
+# fastapi>=0.110            # api/app.py
 # uvicorn>=0.29
-# streamlit>=1.32
+# streamlit>=1.32           # dashboard/dashboard.py

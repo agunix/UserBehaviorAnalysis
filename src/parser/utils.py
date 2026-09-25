@@ -1,12 +1,11 @@
 """
 AI-UBA :: Parser Utils
 ------------------------
-Helper functions for processing Windows Event Log (EVTX) XMLs:
-- XML ​​to Python dict conversion
-- Event ID to human-readable description and category mapping
-- Timestamp normalization (UTC, ISO-8601)
-- Safe field extraction
-
+Windows Event Log (EVTX) XML-lərini emal etmək üçün köməkçi funksiyalar:
+  - XML -> Python dict çevrilməsi
+  - Event ID -> insan-oxunaqlı təsvir və kateqoriya lüğəti
+  - Timestamp normallaşdırma (UTC, ISO-8601)
+  - Təhlükəsiz (safe) sahə çıxarılması
 """
 
 from __future__ import annotations
@@ -16,18 +15,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from xml.etree import ElementTree as ET
 
-
-# using namespace in the EVTX XML 
-
+# EVTX XML-də istifadə olunan namespace
 _NS = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
 
 
 # --------------------------------------------------------------------------- #
-
-# Event ID -> Metadata mapping
+# Event ID -> Metadata lüğəti
 # --------------------------------------------------------------------------- #
-# category: grouping for behavioral analytics (auth, process, network, persistence, account_mgmt)
-
+# category: davranış analitikası üçün qruplaşdırma (auth, process, network, persistence, account_mgmt)
 EVENT_ID_METADATA: Dict[int, Dict[str, str]] = {
     4624: {"name": "LogonSuccess", "category": "auth", "source": "security"},
     4625: {"name": "LogonFailure", "category": "auth", "source": "security"},
@@ -53,9 +48,7 @@ EVENT_ID_METADATA: Dict[int, Dict[str, str]] = {
 
 
 def get_event_metadata(event_id: int) -> Dict[str, str]:
-
-    """Returns metadata for a given event ID; returns default if ID is unknown."""
-
+    """Verilmiş event ID üçün metadata qaytarır; naməlum ID üçün defolt qaytarır."""
     return EVENT_ID_METADATA.get(
         event_id,
         {"name": "Unknown", "category": "uncategorized", "source": "unknown"},
@@ -63,33 +56,25 @@ def get_event_metadata(event_id: int) -> Dict[str, str]:
 
 
 # --------------------------------------------------------------------------- #
-
-# Timestamp normalization
-
+# Timestamp normallaşdırma
 # --------------------------------------------------------------------------- #
 
 def normalize_timestamp(raw_ts: str) -> Optional[str]:
     """
-
-    Converts the SystemTime value from Windows Event Log (e.g., '2026-08-03T10:15:32.1234567Z')
-    to ISO-8601 UTC format (with microsecond precision).
-
+    Windows Event Log-dakı SystemTime dəyərini (məs: '2026-08-03T10:15:32.1234567Z')
+    ISO-8601 UTC formatına (mikrosaniyə dəqiqliyi ilə) çevirir.
     """
     if not raw_ts:
         return None
     try:
-
-        # Windows FILETIME-based timestamps often provide 7-digit fractional seconds,
-        # but Python's datetime.fromisoformat only supports up to 6 digits.
-
+        # Windows FILETIME-based timestamp-lər çox vaxt 7 rəqəmli fraksional saniyə verir,
+        # Python isə maksimum 6 rəqəmi dəstəkləyir -> kəsilir.
         cleaned = re.sub(r"(\.\d{6})\d*Z$", r"\1Z", raw_ts)
         cleaned = cleaned.replace("Z", "+00:00")
         dt = datetime.fromisoformat(cleaned)
         return dt.astimezone(timezone.utc).isoformat()
     except ValueError:
-
-        return raw_ts  # fallback: keep the original value, continue processing
-
+        return raw_ts  # fallback: xam dəyəri saxla, emal davam etsin
 
 
 # --------------------------------------------------------------------------- #
@@ -98,11 +83,9 @@ def normalize_timestamp(raw_ts: str) -> Optional[str]:
 
 def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
     """
+    Tək bir Windows Event XML-ini (python-evtx-dən gələn) strukturlaşdırılmış dict-ə çevirir.
 
-    Converts a single Windows Event XML (from python-evtx) into a structured dict.
-
-    Return structure:
-
+    Qaytarılan struktur:
     {
         "event_id": int,
         "timestamp": str (ISO-8601 UTC),
@@ -117,9 +100,7 @@ def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
 
     system = root.find("e:System", _NS)
     if system is None:
-
-        raise ValueError("Event XML does not contain a <System> element")
-
+        raise ValueError("Event XML-də <System> elementi tapılmadı")
 
     event_id_el = system.find("e:EventID", _NS)
     event_id = int(event_id_el.text) if event_id_el is not None and event_id_el.text else -1
@@ -139,9 +120,7 @@ def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
     record_id_el = system.find("e:EventRecordID", _NS)
     record_id = int(record_id_el.text) if record_id_el is not None and record_id_el.text else None
 
-
-    #  Fields under EventData / UserData (with the Name attribute)
-
+    # EventData / UserData altındakı sahələr (Name atributu ilə)
     event_data: Dict[str, Any] = {}
     event_data_el = root.find("e:EventData", _NS)
     if event_data_el is not None:
@@ -161,9 +140,7 @@ def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
 
 
 def safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
-
-    """Safely extracts a value from a dictionary (replaces empty strings with the default)."""
-
+    """Dict-dən None-safe şəkildə dəyər çıxarır (boş string-i də default ilə əvəz edir)."""
     val = d.get(key, default)
     if val is None or val == "":
         return default
