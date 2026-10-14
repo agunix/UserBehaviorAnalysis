@@ -60,21 +60,18 @@ def get_event_metadata(event_id: int) -> Dict[str, str]:
 # --------------------------------------------------------------------------- #
 
 def normalize_timestamp(raw_ts: str) -> Optional[str]:
-    """
-    Windows Event Log-dakı SystemTime dəyərini (məs: '2026-08-03T10:15:32.1234567Z')
-    ISO-8601 UTC formatına (mikrosaniyə dəqiqliyi ilə) çevirir.
-    """
     if not raw_ts:
         return None
     try:
-        # Windows FILETIME-based timestamp-lər çox vaxt 7 rəqəmli fraksional saniyə verir,
-        # Python isə maksimum 6 rəqəmi dəstəkləyir -> kəsilir.
-        cleaned = re.sub(r"(\.\d{6})\d*Z$", r"\1Z", raw_ts)
-        cleaned = cleaned.replace("Z", "+00:00")
+        cleaned = raw_ts.strip().replace("Z", "+00:00")
+        cleaned = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", cleaned)   # +0000 -> +00:00
+        cleaned = re.sub(r"\.(\d+)", lambda m: "." + m.group(1).ljust(6, "0")[:6], cleaned, count=1)
         dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc).isoformat()
     except ValueError:
-        return raw_ts  # fallback: xam dəyəri saxla, emal davam etsin
+        return raw_ts
 
 
 # --------------------------------------------------------------------------- #
