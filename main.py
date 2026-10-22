@@ -1,0 +1,62 @@
+"""
+AI-UBA :: giriş nöqtəsi
+-------------------------
+API + dashboard-u `config.yaml` / environment-dəki `api.host` və `api.port` ilə işə salır.
+
+    python main.py                      # http://127.0.0.1:8088
+    AIUBA_API__PORT=9000 python main.py # fərqli port
+
+Production-da bu fayl systemd vasitəsilə işə salınır (bax: deploy/aiuba.service).
+"""
+
+from __future__ import annotations
+
+import logging
+import sys
+from logging.handlers import RotatingFileHandler
+
+import uvicorn
+
+from src.config.config import get_settings
+
+
+def setup_logging(settings) -> None:
+    handlers = [logging.StreamHandler(sys.stdout)]
+    try:
+        handlers.append(
+            RotatingFileHandler(
+                settings.logging.log_file,
+                maxBytes=settings.logging.max_bytes,
+                backupCount=settings.logging.backup_count,
+                encoding="utf-8",
+            )
+        )
+    except OSError as exc:  # məs. fayl sistemi yalnız oxunandır - stdout/journald kifayətdir
+        print(f"Xəbərdarlıq: log faylı açıla bilmədi ({exc}); yalnız stdout istifadə olunur.", file=sys.stderr)
+    logging.basicConfig(
+        level=getattr(logging, settings.logging.level),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=handlers,
+        force=True,
+    )
+
+
+def main() -> None:
+    settings = get_settings()
+    setup_logging(settings)
+    api = settings.api
+    logging.getLogger("aiuba").info(
+        "AI-UBA başlayır: http://%s:%s (auth: %s)",
+        api.host, api.port, "aktiv" if api.basic_password else "söndürülüb",
+    )
+    uvicorn.run(
+        "src.api.app:create_app",
+        factory=True,
+        host=api.host,
+        port=api.port,
+        log_level=settings.logging.level.lower(),
+    )
+
+
+if __name__ == "__main__":
+    main()

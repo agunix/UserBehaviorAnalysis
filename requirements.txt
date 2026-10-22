@@ -10,8 +10,9 @@ pywin32>=306; sys_platform == "win32"   # live rejim üçün, yalnız Windows-da
 requests>=2.31            # Wazuh Indexer (OpenSearch) REST sorğuları üçün
 urllib3>=2.0               # self-signed sertifikat xəbərdarlıqlarının idarəsi üçün
 
-# --- Gələcək modullar üçün (artıq strukturda nəzərdə tutulub) ---
+# --- API + Dashboard (src/api) ---
+fastapi>=0.110
+uvicorn>=0.29
+
+# --- Gələcək modullar üçün ---
 # scikit-learn>=1.4        # model/train.py, model/predict.py (Isolation Forest və s.)
-# fastapi>=0.110            # api/app.py
-# uvicorn>=0.29
-# streamlit>=1.32           # dashboard/dashboard.py

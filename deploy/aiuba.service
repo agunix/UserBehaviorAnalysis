@@ -1,0 +1,34 @@
+[Unit]
+Description=AI-UBA (User Behavior Analytics) API and dashboard
+Documentation=https://github.com/agunix/UserBehaviorAnalysis
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aiuba
+Group=aiuba
+WorkingDirectory=/opt/aiuba
+# Parollar burada saxlanılır (chmod 600, root-a məxsus) - repo-ya DAXİL DEYİL
+EnvironmentFile=/etc/aiuba/aiuba.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/aiuba/venv/bin/python /opt/aiuba/main.py
+Restart=on-failure
+RestartSec=5
+
+# Sərtləşdirmə (service yalnız data/ və logs/ qovluqlarına yaza bilər)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/aiuba/data /opt/aiuba/logs
+
+[Install]
+WantedBy=multi-user.target

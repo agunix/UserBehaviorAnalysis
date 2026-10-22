@@ -1,0 +1,33 @@
+--- a/src/config/config.py
++++ b/src/config/config.py
+@@ -84,6 +84,22 @@
+         return Path(v)
+ 
+ 
++class ApiSettings(BaseModel):
++    """
++    AI-UBA API + dashboard (FastAPI/uvicorn) ayarları.
++    Defolt olaraq yalnız localhost-a bind olunur. Şəbəkəyə açmaq istəyirsinizsə
++    mütləq basic_password təyin edin və TLS üçün reverse proxy istifadə edin.
++    Env nümunəsi: AIUBA_API__PORT=8088, AIUBA_API__BASIC_PASSWORD=...
++    """
++
++    host: str = "127.0.0.1"
++    port: int = 8088
++    basic_user: str = "admin"
++    basic_password: str = ""          # boşdursa autentifikasiya söndürülüb
++    cache_ttl_seconds: int = 15       # eyni sorğular üçün Indexer-ə təkrar müraciəti məhdudlaşdırır
++    max_events_per_source: int = 5000  # bir sorğuda mənbə başına maksimum event (<= 10000)
++
++
+ class RiskSettings(BaseModel):
+     rule_weight: float = 0.6
+     ml_weight: float = 0.4
+@@ -109,6 +125,7 @@
+     risk: RiskSettings = Field(default_factory=RiskSettings)
+     wazuh_indexer: WazuhIndexerSettings = Field(default_factory=WazuhIndexerSettings)
+     wazuh_alert_output: WazuhAlertOutputSettings = Field(default_factory=WazuhAlertOutputSettings)
++    api: ApiSettings = Field(default_factory=ApiSettings)
+ 
+     model_config = ConfigDict(arbitrary_types_allowed=True)
+ 
