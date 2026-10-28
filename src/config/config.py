@@ -14,6 +14,14 @@ DATA_DIR = PROJECT_ROOT / "data"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
 
+class ApiSettings(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 8088
+    basic_user: str = "admin"
+    basic_password: str = ""
+    cache_ttl_seconds: int = 15
+    max_events_per_source: int = 5000
+
 class ParserSettings(BaseModel):
     channels: List[str] = Field(
         default_factory=lambda: ["Security", "Microsoft-Windows-Sysmon/Operational"]
@@ -29,8 +37,8 @@ class ParserSettings(BaseModel):
     parsed_output_dir: Path = DATA_DIR / "parsed"
     mode: Literal["live", "offline"] = "offline"
 
-    # Linux mənbələr (auditd, sshd/PAM, syscheck) Wazuh-da Event ID ilə deyil,
-    # rule.groups ilə identifikasiya olunur - bax: src/integrations/linux_client.py
+    # Linux sources (auditd, sshd/PAM, syscheck) are identified in Wazuh not by Event ID,
+    # but by rule.groups — see: src/integrations/linux_client.py
     linux_rule_groups: List[str] = Field(
         default_factory=lambda: [
             "sshd",
@@ -51,7 +59,7 @@ class ParserSettings(BaseModel):
 
 class LoggingSettings(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-    log_file: Path = LOGS_DIR / "aiuba.log"
+    log_file: Path = LOGS_DIR / "uba.log"
     max_bytes: int = 10 * 1024 * 1024
     backup_count: int = 5
 
@@ -76,7 +84,7 @@ class WazuhIndexerSettings(BaseModel):
 
 
 class WazuhAlertOutputSettings(BaseModel):
-    output_file: Path = DATA_DIR / "aiuba_alerts" / "aiuba_events.json"
+    output_file: Path = DATA_DIR / "uba_alerts" / "uba_events.json"
 
     @field_validator("output_file", mode="before")
     @classmethod
@@ -96,7 +104,7 @@ class RiskSettings(BaseModel):
     def _weights_sum_check(cls, v, info):
         rule_weight = info.data.get("rule_weight")
         if rule_weight is not None and not (0.99 <= rule_weight + v <= 1.01):
-            raise ValueError("rule_weight + ml_weight cəmi 1.0 olmalıdır")
+            raise ValueError("The sum of rule_weight + ml_weight must be 1.0")
         return v
 
 
@@ -121,7 +129,7 @@ def _load_yaml(path: Path) -> dict:
 
 
 def _apply_env_overrides(raw: dict) -> dict:
-    prefix = "AIUBA_"
+    prefix = "UBA_"
     for env_key, env_val in os.environ.items():
         if not env_key.startswith(prefix):
             continue

@@ -351,7 +351,7 @@ if __name__ == "__main__":
     if debug and count == 0:
         print(
             "\nNo events found. --debug: To inspect the raw alert structure, "
-            "execute the following curl command and share the result:\n"
+            "To inspect the raw alert structure, run:\n"
             "  curl -k -u <user>:<pass> "
             "'https://127.0.0.1:9200/wazuh-alerts-*/_search?size=1' "
             "-H 'Content-Type: application/json' "

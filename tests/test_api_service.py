@@ -137,7 +137,7 @@ def test_limit_only_slices_table_not_summary():
 
 
 @pytest.mark.parametrize("exc, fragment", [
-    (requests.exceptions.ConnectionError("boom 10.1.2.3"), "qoşulmaq olmadı"),
+    (requests.exceptions.ConnectionError("boom 10.1.2.3"), "connection error"),
     (requests.exceptions.ConnectTimeout("t"), "timeout"),
     (requests.exceptions.SSLError("s"), "SSL"),
 ])
@@ -155,7 +155,7 @@ def test_http_401_message():
     err = requests.exceptions.HTTPError(response=resp)
     with pytest.raises(IndexerUnavailable) as info:
         make_service(lin=FakeClient(error=err)).overview(60, "linux", 10)
-    assert "autentifikasiya" in str(info.value)
+    assert "authentication error" in str(info.value)
 
 
 def test_bad_document_is_skipped_not_fatal():

@@ -1,6 +1,6 @@
 # UBA configuration file
 # Override for Environment variable: UBA_<SECTION>__<KEY>
-# Məsələn: UBA_PARSER__MODE=live
+# For example: UBA_PARSER__MODE=live
 
 environment: development
 
@@ -23,7 +23,7 @@ parser:
 
 logging:
   level: INFO
-  log_file: "logs/aiuba.log"
+  log_file: "logs/uba.log"
   max_bytes: 10485760
   backup_count: 5
 
