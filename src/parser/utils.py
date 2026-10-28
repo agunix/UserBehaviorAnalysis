@@ -1,11 +1,11 @@
 """
-AI-UBA :: Parser Utils
+UBA :: Parser Utils
 ------------------------
-Windows Event Log (EVTX) XML-lərini emal etmək üçün köməkçi funksiyalar:
-  - XML -> Python dict çevrilməsi
-  - Event ID -> insan-oxunaqlı təsvir və kateqoriya lüğəti
-  - Timestamp normallaşdırma (UTC, ISO-8601)
-  - Təhlükəsiz (safe) sahə çıxarılması
+Functions for parsing Windows Event Log (EVTX) XML:
+  - XML -> Python dict conversion
+  - Event ID -> human-readable description and category dictionary
+  - Timestamp normalization (UTC, ISO-8601)
+  - Safe field extraction
 """
 
 from __future__ import annotations
@@ -15,14 +15,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from xml.etree import ElementTree as ET
 
-# EVTX XML-də istifadə olunan namespace
+# Using namescpace on the EVTX XML to avoid "unbound prefix" errors when parsing with ElementTree.
 _NS = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
 
 
 # --------------------------------------------------------------------------- #
-# Event ID -> Metadata lüğəti
+# Event ID -> Metadata dictionary
 # --------------------------------------------------------------------------- #
-# category: davranış analitikası üçün qruplaşdırma (auth, process, network, persistence, account_mgmt)
+# category: grouping for behavior analysis (auth, process, network, persistence, account_mgmt)
 EVENT_ID_METADATA: Dict[int, Dict[str, str]] = {
     4624: {"name": "LogonSuccess", "category": "auth", "source": "security"},
     4625: {"name": "LogonFailure", "category": "auth", "source": "security"},
@@ -48,7 +48,7 @@ EVENT_ID_METADATA: Dict[int, Dict[str, str]] = {
 
 
 def get_event_metadata(event_id: int) -> Dict[str, str]:
-    """Verilmiş event ID üçün metadata qaytarır; naməlum ID üçün defolt qaytarır."""
+    """Returns metadata for a given event ID; returns default for unknown IDs."""
     return EVENT_ID_METADATA.get(
         event_id,
         {"name": "Unknown", "category": "uncategorized", "source": "unknown"},
@@ -56,7 +56,7 @@ def get_event_metadata(event_id: int) -> Dict[str, str]:
 
 
 # --------------------------------------------------------------------------- #
-# Timestamp normallaşdırma
+# Timestamp normalization
 # --------------------------------------------------------------------------- #
 
 def normalize_timestamp(raw_ts: str) -> Optional[str]:
@@ -80,9 +80,9 @@ def normalize_timestamp(raw_ts: str) -> Optional[str]:
 
 def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
     """
-    Tək bir Windows Event XML-ini (python-evtx-dən gələn) strukturlaşdırılmış dict-ə çevirir.
+    Converts a single Windows Event XML (from python-evtx) to a structured dictionary.
 
-    Qaytarılan struktur:
+    Returned structure:
     {
         "event_id": int,
         "timestamp": str (ISO-8601 UTC),
@@ -97,7 +97,7 @@ def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
 
     system = root.find("e:System", _NS)
     if system is None:
-        raise ValueError("Event XML-də <System> elementi tapılmadı")
+        raise ValueError("Event XML does not contain a <System> element")
 
     event_id_el = system.find("e:EventID", _NS)
     event_id = int(event_id_el.text) if event_id_el is not None and event_id_el.text else -1
@@ -117,7 +117,7 @@ def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
     record_id_el = system.find("e:EventRecordID", _NS)
     record_id = int(record_id_el.text) if record_id_el is not None and record_id_el.text else None
 
-    # EventData / UserData altındakı sahələr (Name atributu ilə)
+    # EventData / UserData below fields (Name attribute)
     event_data: Dict[str, Any] = {}
     event_data_el = root.find("e:EventData", _NS)
     if event_data_el is not None:
@@ -137,7 +137,7 @@ def xml_event_to_dict(xml_string: str) -> Dict[str, Any]:
 
 
 def safe_get(d: Dict[str, Any], key: str, default: Any = None) -> Any:
-    """Dict-dən None-safe şəkildə dəyər çıxarır (boş string-i də default ilə əvəz edir)."""
+    """Extracts a value from a dictionary in a None-safe manner (replaces empty strings with the default value)."""
     val = d.get(key, default)
     if val is None or val == "":
         return default

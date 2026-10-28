@@ -1,23 +1,22 @@
 """
-AI-UBA :: API + Dashboard (FastAPI)
+UBA :: API + Dashboard (FastAPI)
 -------------------------------------
-Tək proses, tək port: həm JSON API, həm də dashboard UI bu tətbiqdən təqdim olunur.
+One process, one port: both JSON API and dashboard UI are provided from this application.
 
 Endpoint-lər:
-    GET /healthz        - proses canlıdır (autentifikasiyasız, yalnız {"status": "ok"})
-    GET /api/health     - Wazuh Indexer ilə əlaqə vəziyyəti
-    GET /api/overview   - xülasə (KPI, timeline, top-N) + ən yeni event-lər
+    GET /healthz        - process is alive (unauthenticated, only {"status": "ok"})
+    GET /api/health     - Wazuh Indexer connection status
+    GET /api/overview   - summary (KPI, timeline, top-N) + latest events
     GET /               - dashboard (index.html)
     GET /ui/app.js|css  - UI aktivləri (yalnız whitelist)
 
-Autentifikasiya: `api.basic_password` təyin olunubsa BÜTÜN endpoint-lər (/healthz istisna)
-HTTP Basic tələb edir. Defolt bind ünvanı 127.0.0.1-dir. Şəbəkəyə açırsınızsa parol təyin
-edin və TLS üçün reverse proxy (nginx/caddy) arxasına qoyun - Basic Auth açıq HTTP üzərindən
-parolu aşkar mətnə yaxın formada ötürür.
+Authentication: `api.basic_password` is set, all endpoints are protected (except /healthz)
+HTTP Basic authentication is required. Default bind address is 127.0.0.1. If you expose it to the network, set a password
+and use a reverse proxy (nginx/caddy) for TLS - Basic Auth transmits the password in clear text over HTTP.
 
-İşə salmaq:
+Running:
     python main.py
-    (və ya) uvicorn src.api.app:create_app --factory --host 127.0.0.1 --port 8088
+    (or) uvicorn src.api.app:create_app --factory --host 127.0.0.1 --port 8088
 """
 
 from __future__ import annotations
@@ -43,8 +42,8 @@ UI_ASSETS = {
     "app.css": "text/css; charset=utf-8",
 }
 
-# UI hücumçunun nəzarətində ola bilən log məzmununu göstərir (istifadəçi adı, komanda sətri...).
-# Ona görə inline skript/stil qadağandır, yalnız eyni mənşəli fayllara icazə verilir.
+# The UI displays log content that could be under the attacker's control (username, command line...).
+# Therefore, inline scripts/styles are prohibited; only same-origin files are allowed.
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
     "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
@@ -60,8 +59,8 @@ def create_app(service: Optional[EventService] = None, settings=None) -> FastAPI
 
     if api_cfg.host not in _LOCAL_HOSTS and not api_cfg.basic_password:
         logger.warning(
-            "API %s ünvanında autentifikasiyasız açıqdır! api.basic_password təyin edin "
-            "və ya host-u 127.0.0.1 edib reverse proxy istifadə edin.",
+            "API %s open with unauthenticated access! Assign api.basic_password to enable authentication "
+            "or bind to 127.0.0.1 and use a reverse proxy.",
             api_cfg.host,
         )
 
@@ -81,7 +80,7 @@ def create_app(service: Optional[EventService] = None, settings=None) -> FastAPI
         if not (user_ok and pass_ok):
             raise HTTPException(
                 status_code=401,
-                detail="Autentifikasiya tələb olunur",
+                detail="Authentication required",
                 headers={"WWW-Authenticate": 'Basic realm="AI-UBA"'},
             )
 
@@ -121,9 +120,9 @@ def create_app(service: Optional[EventService] = None, settings=None) -> FastAPI
 
     @router.get("/api/overview")
     def overview(
-        minutes: int = Query(60, ge=5, le=10080, description="Son neçə dəqiqə (5 - 10080)"),
+        minutes: int = Query(60, ge=5, le=10080, description="Last n minutes (5 - 10080)"),
         source: Literal["all", "windows", "linux"] = "all",
-        limit: int = Query(200, ge=1, le=1000, description="Cədvəldə göstəriləcək event sayı"),
+        limit: int = Query(200, ge=1, le=1000, description="Number of events to display in the table"),
     ):
         try:
             return service.overview(minutes=minutes, source=source, limit=limit)
@@ -138,14 +137,14 @@ def create_app(service: Optional[EventService] = None, settings=None) -> FastAPI
     def ui_asset(name: str):
         media_type = UI_ASSETS.get(name)
         if media_type is None:
-            raise HTTPException(status_code=404, detail="Tapılmadı")
+            raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(UI_DIR / name, media_type=media_type)
 
     app.include_router(router)
 
     @app.exception_handler(Exception)
-    async def unhandled(request: Request, exc: Exception):  # pragma: no cover - son müdafiə xətti
-        logger.exception("Gözlənilməz xəta: %s %s", request.method, request.url.path)
-        return JSONResponse(status_code=500, content={"detail": "Daxili server xətası"})
+    async def unhandled(request: Request, exc: Exception):  # pragma: no cover - last defense, should not happen
+        logger.exception("Unanticipated error: %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     return app

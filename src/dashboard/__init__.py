@@ -1,1 +1,1 @@
-# dashboard modulu - hele inkishaf merhelesindedir (bax: ROADMAP.md)
+# dashboard modulu - on the roadmap (see: ROADMAP.md)

@@ -1,8 +1,8 @@
 /*
- * AI-UBA dashboard
- * DİQQƏT (təhlükəsizlik): event sahələri (istifadəçi adı, komanda sətri, fayl yolu...)
- * hücumçunun nəzarətində ola bilər. Buna görə DOM-a YALNIZ textContent / title ilə yazılır;
- * innerHTML, insertAdjacentHTML və s. istifadə etməyin.
+ * UBA dashboard
+ * WARNING (security): event fields (username, command line, file path...)
+ * can be controlled by the attacker. For this reason, only textContent / title should be used for writing to the DOM;
+ * do not use innerHTML, insertAdjacentHTML or similar.
  */
 (() => {
   "use strict";
@@ -24,7 +24,7 @@
   let events = [];
   let lastMeta = null;
 
-  // ---------- DOM köməkçiləri ----------
+  // ---------- DOM helpers ----------
   function clear(node) { node.textContent = ""; }
 
   function el(tag, cls, text) {
@@ -88,7 +88,7 @@
     b.hidden = false;
   }
 
-  // ---------- Şəbəkə ----------
+  // ---------- Network ----------
   async function getJSON(url) {
     const r = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" });
     if (!r.ok) {
@@ -97,7 +97,7 @@
         const j = await r.json();
         if (typeof j.detail === "string") msg = j.detail;
         else if (Array.isArray(j.detail)) msg = j.detail.map((d) => d.msg).join("; ");
-      } catch (_) { /* gövdə JSON deyil */ }
+      } catch (_) { /* body not JSON */ }
       throw new Error(msg);
     }
     return r.json();
@@ -139,7 +139,7 @@
     const max = Math.max(1, ...buckets.map((b) => b.total));
     for (const b of buckets) {
       const col = el("div", "tl-col");
-      col.title = fmtBucket(b.t, tl.bucket_seconds) + " — " + nf.format(b.total) + " event, " + nf.format(b.auth_failures) + " uğursuz giriş";
+      col.title = fmtBucket(b.t, tl.bucket_seconds) + " — " + nf.format(b.total) + " event, " + nf.format(b.auth_failures) + " failed login";
       const bad = el("div", "tl-seg tl-bad");
       bad.style.height = ((100 * b.auth_failures) / max).toFixed(1) + "%";
       const ok = el("div", "tl-seg tl-ok");
@@ -223,11 +223,11 @@
     renderEvents();
   }
 
-  // ---------- Yükləmə ----------
+  // ---------- Installation ----------
   async function load() {
     if (loading) { pending = true; return; }
     loading = true;
-    setStatus("load", "Yüklənir…");
+    setStatus("load", "Loading…");
     const minutes = $("sel-window").value;
     const source = $("sel-source").value;
     const url = "/api/overview?minutes=" + encodeURIComponent(minutes) + "&source=" + encodeURIComponent(source) + "&limit=" + EVENT_LIMIT;
@@ -245,12 +245,12 @@
         }
         $("updated").textContent = "· yeniləndi " + new Date().toLocaleTimeString();
       } else {
-        setStatus("err", "Xəta");
-        setBanner("err", ov.reason && ov.reason.message ? ov.reason.message : "Naməlum xəta");
+        setStatus("err", "Error");
+        setBanner("err", ov.reason && ov.reason.message ? ov.reason.message : "Unknown error");
       }
     } catch (e) {
-      setStatus("err", "Xəta");
-      setBanner("err", e && e.message ? e.message : "Naməlum xəta");
+      setStatus("err", "Error");
+      setBanner("err", e && e.message ? e.message : "Unknown error");
     } finally {
       loading = false;
       if (pending) { pending = false; load(); }

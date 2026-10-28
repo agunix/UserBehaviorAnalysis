@@ -1,62 +1,61 @@
-# AI-UBA: Linux-da deploy və dashboard
+# UBA Linux deploymen and dashboard
 
-AI-UBA API və dashboard **tək proses, tək port** üzərində işləyir (FastAPI + uvicorn). UI üçün
-ayrıca web server, Node.js və ya internet (CDN) tələb olunmur.
+UBA API and dashboard runs on **one process, one port** (FastAPI + uvicorn).
 
 | | |
 |---|---|
-| Defolt ünvan | `http://127.0.0.1:8088` |
-| Port/host dəyişmək | `AIUBA_API__PORT`, `AIUBA_API__HOST` |
-| Giriş nöqtəsi | `python main.py` |
-| Wazuh Indexer | `AIUBA_WAZUH_INDEXER__*` (host, port, username, password, verify_ssl) |
+| Default port | `http://127.0.0.1:8088` |
+| Port/host changing | `UBA_API__PORT`, `UBA_API__HOST` |
+| Entry point | `python main.py` |
+| Wazuh Indexer | `UBA_WAZUH_INDEXER__*` (host, port, username, password, verify_ssl) |
 
-## 1. Sürətli lokal işə salma (inkişaf)
+## 1. Fast local running
 
 ```bash
 cd UserBehaviorAnalysis
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-export AIUBA_WAZUH_INDEXER__PASSWORD='<indexer admin parolu>'
+export UBA_WAZUH_INDEXER__PASSWORD='<indexer admin password>'
 python main.py
 # -> http://127.0.0.1:8088
 ```
 
-Port tutulubsa: `ss -ltnp | grep 8088`, sonra `AIUBA_API__PORT=8090 python main.py`.
+If port is busy: `ss -ltnp | grep 8088`, sonra `UBA_API__PORT=8090 python main.py`.
 
-## 2. systemd ilə deploy (tövsiyə olunan)
+## 2. Deployment with systemd (recommended)
 
 ```bash
 sudo ./deploy/install.sh
-sudo nano /etc/aiuba/aiuba.env      # parolları təyin edin
-sudo systemctl start aiuba
-sudo systemctl status aiuba
-journalctl -u aiuba -f              # canlı loglar
+sudo nano /etc/uba/uba.env      # determine passwords
+sudo systemctl start uba
+sudo systemctl status uba
+journalctl -u uba -f              # live logs
 ```
 
-`install.sh` nə edir:
+What does `install.sh`:
 
-- `aiuba` adlı sistem istifadəçisi yaradır (login shell-i yoxdur)
-- kodu `/opt/aiuba`-ya kopyalayır (kod **root**-a məxsusdur, servis ona yaza bilmir), ayrıca venv qurur
-- yalnız `/opt/aiuba/data` və `/opt/aiuba/logs` servis üçün yazıla bilən qalır
-- parolları `/etc/aiuba/aiuba.env` faylında saxlayır (`chmod 600`, sahibi root); repo-ya düşmür
-- `aiuba.service` unit-ini quraşdırıb `enable` edir (server yenidən başlayanda avtomatik qalxır)
+- `uba` adlı sistem istifadəçisi yaradır (nothing any login shell)
+- copied password to `/opt/uba` (password belongs to the **root**, so service cannot write them), creates different venv
+- only `/opt/uba/data` and `/opt/uba/logs` staying write only for service
+- passwords stored in `/etc/uba/uba.env` file (`chmod 600`, owner is root); not seen in repo
+- configured unit `uba.service` and change to`enable` (service is going up every running of server)
 
-**Yeniləmə:** repo-da `git pull`, sonra yenidən `sudo ./deploy/install.sh`. Mövcud `aiuba.env`
-toxunulmaz qalır, servis avtomatik restart olunur.
+**Update:** In the repo `git pull`, then again `sudo ./deploy/install.sh`. Existing `uba.env`
+staying untouchable, service will restart automatically.
 
-## 3. Dashboard-a necə çatmaq
+## 3. How reach Dashboard
 
-Defolt olaraq servis **yalnız `127.0.0.1`**-də dinləyir, yəni şəbəkədən görünmür. Üç variant:
+By default **only `127.0.0.1`** listened, so not seen by network. Three type:
 
-**a) SSH tunnel (ən sadə və təhlükəsiz).** Öz kompüterinizdən:
+**a) SSH tunnel (simple and secure).** in the local machine:
 
 ```bash
 ssh -L 8088:127.0.0.1:8088 socadmin@<server-ip>
-# sonra brauzerdə: http://127.0.0.1:8088
+# then from browser: http://127.0.0.1:8088
 ```
 
-**b) Reverse proxy ilə TLS (komanda üçün).** `aiuba.env`-də host `127.0.0.1` qalır, nginx 443-də TLS verir:
+**b) Reverse proxy with TLS (for command).** host is `uba.env` staying `127.0.0.1`, in the nginx 443 gives TLS:
 
 ```nginx
 server {
@@ -73,32 +72,32 @@ server {
 }
 ```
 
-**c) Birbaşa şəbəkəyə açmaq.** `AIUBA_API__HOST=0.0.0.0` və **mütləq** `AIUBA_API__BASIC_PASSWORD` təyin edin,
-firewall-da yalnız lazım olan IP-yə icazə verin (`sudo ufw allow from <ip> to any port 8088 proto tcp`).
-Basic Auth şifrələmir; açıq HTTP üzərindən istifadə etməyin, (b) variantını seçin.
+**c) Directly open to network.** `UBA_API__HOST=0.0.0.0` və **important** `UBA_API__BASIC_PASSWORD` determine,
+please give permission only necessary IP address (`sudo ufw allow from <ip> to any port 8088 proto tcp`).
+Basic Auth not encrypted; don't use from open HTTP, use (b).
 
-## 4. Təhlükəsizlik qeydləri
+## 4. Security notes
 
-- Dashboard log məzmununu göstərir (istifadəçi adı, komanda sətri, fayl yolu), bu da hücumçunun nəzarətində ola bilər.
-  UI buna görə yalnız `textContent` ilə yazır, inline skript/stil yoxdur və CSP `script-src 'self'` tətbiq olunur. UI-ya kod əlavə edərkən `innerHTML` istifadə etməyin.
-- `/healthz` autentifikasiyasızdır və yalnız `{"status":"ok"}` qaytarır (monitorinq üçün). Qalan hər şey Basic Auth arxasındadır (parol təyin olunubsa).
-- Swagger/OpenAPI səhifələri söndürülüb.
-- Indexer parolu və dashboard parolu yalnız `aiuba.env`-də saxlanılmalıdır, `config.yaml`-a yazmayın.
-- `wazuh_indexer.verify_ssl=false` yalnız self-signed sertifikatlı test mühiti üçündür. Production-da sertifikatı doğrulayın.
+- Dashboard screening content of log (username, command prompt, file path), it is may undercontrol to attacker.
+  Therefore UI only write with `textContent`, there are nothing inline script/style and CSP `script-src 'self'`. When adding script to UI don't use `innerHTML`.
+- `/healthz` is unauthenticated and only returns `{"status":"ok"}` (for monitoring). All of the others background of Basic Auth (if it has been assinged).
+- Swagger/OpenAPI pages are off.
+- The password of indexer stored only in `uba.env`, do not write to the `config.yaml`file.
+- Certificate of self-signed `wazuh_indexer.verify_ssl=false` is only for test env. Please confirm certificate in the production.
 
-## 5. Problemlərin həlli
+## 5. Problem solving
 
-| Dashboard-da mesaj / simptom | Səbəb və həll |
+| Message on the Dashboard | Reason and solving |
 |---|---|
-| `Indexer-ə qoşulmaq olmadı` | Wazuh Docker işləmirmi (`docker ps`)? `9200:9200` port mapping var? `curl -k -u admin:<parol> https://127.0.0.1:9200` |
-| `Indexer autentifikasiya xətası` | `AIUBA_WAZUH_INDEXER__USERNAME/PASSWORD` səhvdir |
-| `SSL xətası` | `AIUBA_WAZUH_INDEXER__VERIFY_SSL=false` (test) və ya düzgün CA |
-| Brauzer 401 verir | `AIUBA_API__BASIC_USER/PASSWORD` ilə daxil olun |
-| Event sayı 0 | Seçilmiş pəncərədə uyğun event yoxdur: pəncərəni böyüdün, agentdə aktivlik yaradın |
-| Sarı xəbərdarlıq: "yalnız ən yeni N event təhlil olundu" | Pəncərədə limitdən çox event var; pəncərəni daraldın və ya `AIUBA_API__MAX_EVENTS_PER_SOURCE` artırın (maks. 10000) |
-| Servis qalxmır | `journalctl -u aiuba -n 50 --no-pager`; port konflikti: `ss -ltnp \| grep 8088` |
+| `Indexer not reachable` | Is Wazuh Docker not working?  (`docker ps`)? `9200:9200` is port mapping enable? `curl -k -u admin:<parol> https://127.0.0.1:9200` |
+| `Indexer authentication error` | `UBA_WAZUH_INDEXER__USERNAME/PASSWORD` is wrong |
+| `SSL xətası` | `UBA_WAZUH_INDEXER__VERIFY_SSL=false` (test) or true CA |
+| Browser 401 error | Log in `AIUBA_API__BASIC_USER/PASSWORD` |
+| Event count 0 | There are not any suitable in the selected window: enlarge the window, create active trigger in the agent |
+| Yellow warning: "only the newest N events were analyzed" | There are less event than limit; narrow the window or `UBA_API__MAX_EVENTS_PER_SOURCE` enlarge (max. 10000) |
+| Service is not reachable| `journalctl -u uba -n 50 --no-pager`; port conflict: `ss -ltnp \| grep 8088` |
 
-## 6. Testlər
+## 6. Tests
 
 ```bash
 pip install -r requirements-dev.txt

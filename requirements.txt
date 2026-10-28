@@ -3,16 +3,16 @@ pydantic>=2.6
 PyYAML>=6.0
 
 # --- Parser (Windows Event Log) ---
-python-evtx>=0.7.4        # offline .evtx fayl parsing (platformadan asılı deyil)
-pywin32>=306; sys_platform == "win32"   # live rejim üçün, yalnız Windows-da quraşdırılır
+python-evtx>=0.7.4        # offline .evtx file parsing (platformadan asılı deyil)
+pywin32>=306; sys_platform == "win32"   # for only live type, only on Windows
 
 # --- Wazuh Integration ---
-requests>=2.31            # Wazuh Indexer (OpenSearch) REST sorğuları üçün
-urllib3>=2.0               # self-signed sertifikat xəbərdarlıqlarının idarəsi üçün
+requests>=2.31            # Wazuh Indexer requests for (OpenSearch) REST
+urllib3>=2.0               # self-signed certificate notifications for (OpenSearch) REST
 
 # --- API + Dashboard (src/api) ---
 fastapi>=0.110
 uvicorn>=0.29
 
 # --- Gələcək modullar üçün ---
-# scikit-learn>=1.4        # model/train.py, model/predict.py (Isolation Forest və s.)
+# scikit-learn>=1.4        # model/train.py, model/predict.py (Isolation Forest and etc.)

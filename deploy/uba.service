@@ -6,18 +6,18 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=aiuba
-Group=aiuba
-WorkingDirectory=/opt/aiuba
-# Parollar burada saxlanılır (chmod 600, root-a məxsus) - repo-ya DAXİL DEYİL
-EnvironmentFile=/etc/aiuba/aiuba.env
+User=uba
+Group=uba
+WorkingDirectory=/opt/uba
+# Passwords are storred there (chmod 600, root-a məxsus) - NOT INCLUDED to the repo
+EnvironmentFile=/etc/uba/uba.env
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/aiuba/venv/bin/python /opt/aiuba/main.py
+ExecStart=/opt/uba/venv/bin/python /opt/uba/main.py
 Restart=on-failure
 RestartSec=5
 
-# Sərtləşdirmə (service yalnız data/ və logs/ qovluqlarına yaza bilər)
+# Hardening (service only wirtes data/ and logs/ folders)
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
@@ -28,7 +28,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/opt/aiuba/data /opt/aiuba/logs
+ReadWritePaths=/opt/uba/data /opt/uba/logs
 
 [Install]
 WantedBy=multi-user.target

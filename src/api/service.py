@@ -1,21 +1,19 @@
 """
-AI-UBA :: API Service Layer
+UBA :: API Service Layer
 -----------------------------
-Dashboard/API üçün biznes məntiqi:
+Dashboard/API for bussiness users and analysts. It provides:
 
-  - Wazuh Indexer-dən (Windows + Linux klientləri vasitəsilə) ən YENİ event-ləri çəkir
-  - Eyni sorğuları qısa müddət keşləyir (Indexer-i yükləməmək üçün)
-  - Event-ləri vahid siyahıya birləşdirib xülasə (KPI, timeline, top-N) hesablayır
+  - From Wazuh Indexer (by means of Windows + Linux clients) fetches events in the last N minutes (configurable, default 60)
+  - Caches frequently accessed queries (to avoid loading the Indexer)
+  - Aggregates events into a single list and calculates summaries (KPIs, timelines, top-N)
 
-Dizayn qeydləri:
-  * Sorğular `timestamp desc` ilə gedir ki, pəncərə çox böyükdürsə "kəsilmə" zamanı
-    ən köhnə yox, ən yeni event-lər qalsın. Bu səbəbdən klientlərin `_search`
-    metodundan istifadə olunur (iki klient eyni auth/SSL konfiqurasiyasını paylaşır).
-  * Bir sorğuda mənbə başına maksimum `api.max_events_per_source` (<= 10 000,
-    OpenSearch-in `max_result_window` limiti) event götürülür; cəmi say
-    (`track_total_hits`) ilə `truncated` bayrağı dəqiq hesablanır.
-  * Bu modul HTML render etmir; UI tərəfi event məzmununu (istifadəçi adı, komanda
-    sətri və s. - hücumçunun nəzarətində ola bilər) yalnız textContent ilə göstərir.
+Design notes:
+  * Queries are ordered by `timestamp desc` so that when the window is large, the most recent events are retained rather than the oldest. 
+    This is why clients use the `_search` method with `sort` and `track_total_hits` instead of `_search_by_id` (which is faster but returns only the most recent events).
+  * In a single query, a maximum of `api.max_events_per_source` (<= 10,000, the OpenSearch `max_result_window` limit) events are retrieved per source; 
+    the total count (`track_total_hits`) and the `truncated` flag are calculated accurately.
+  * This module does not render HTML; From UI field (username, command line, 
+    etc. - which could be under the attacker's control) it only displays via `textContent`.
 """
 
 from __future__ import annotations
@@ -45,27 +43,27 @@ _IGNORED_IPS = {"", "-", "::1", "127.0.0.1", "::"}
 
 
 class IndexerUnavailable(Exception):
-    """Indexer-ə çatmaq/sorğu etmək mümkün olmadı. Mesaj istifadəçiyə göstərilə bilər (həssas məlumat yoxdur)."""
+    """Do not expose internal details to the user (no sensitive information)."""
 
 
 def friendly_error(exc: Exception) -> str:
-    """requests xətalarını, host/parol kimi detalları sızdırmadan, anlaşılan mesaja çevirir."""
+    """Convert requests errors to user-friendly messages without exposing sensitive information."""
     if isinstance(exc, requests.exceptions.SSLError):
-        return "SSL xətası: sertifikatı və wazuh_indexer.verify_ssl ayarını yoxlayın"
+        return "SSL error: certificate and wazuh_indexer.verify_ssl settings"
     if isinstance(exc, requests.exceptions.Timeout):
-        return "Indexer vaxtında cavab vermədi (timeout)"
+        return "Indexer timeout: no response within the expected time"
     if isinstance(exc, requests.exceptions.ConnectionError):
-        return "Indexer-ə qoşulmaq olmadı: host/port və Docker port mapping-ini yoxlayın"
+        return "Indexer connection error: check host/port and Docker port mapping"
     if isinstance(exc, requests.exceptions.HTTPError):
         status = exc.response.status_code if exc.response is not None else None
         if status in (401, 403):
-            return "Indexer autentifikasiya xətası: istifadəçi adı/parolu yoxlayın"
-        return f"Indexer HTTP {status} qaytardı"
-    return "Indexer-dən gözlənilməz cavab alındı"
+            return "Indexer authentication error: check username/password"
+        return f"Indexer HTTP {status} returned"
+    return "Indexer returned an unexpected response"
 
 
 # --------------------------------------------------------------------------- #
-# Timestamp parse (Python 3.9+ üçün tolerant: +0000, Z, 7 rəqəmli fraksiya)
+# Timestamp parse (Python 3.9+ for tolerance: +0000, Z, 7 digit fraction)
 # --------------------------------------------------------------------------- #
 
 _OFFSET_RE = re.compile(r"([+-]\d{2})(\d{2})$")
@@ -89,7 +87,7 @@ def parse_ts(value: Optional[str]) -> Optional[datetime]:
 
 
 # --------------------------------------------------------------------------- #
-# Xülasə hesablama (təmiz funksiya - asan test olunur)
+# Summary calculation (clean function - easy to test)
 # --------------------------------------------------------------------------- #
 
 def _bucket_seconds(minutes: int) -> int:
@@ -174,7 +172,7 @@ def build_summary(
 
 
 def _event_to_dict(ev: UserBehaviorEvent) -> Dict[str, Any]:
-    """Event-i JSON-a çevirir; timestamp-ı brauzerlərin (Safari daxil) qəbul etdiyi ISO-8601 UTC formatına salır."""
+    """Convert event to JSON; format timestamp for browser compatibility (including Safari)."""
     d = ev.model_dump()
     ts = parse_ts(d.get("timestamp"))
     if ts is not None:
@@ -194,7 +192,7 @@ class EventService:
         self._cache: "OrderedDict[Tuple[int, str], Tuple[float, Dict[str, Any]]]" = OrderedDict()
         self._lock = threading.Lock()
 
-    # ----- Indexer-ə birbaşa sorğu ----- #
+    # ----- Direct request to Indexer ----- #
 
     def _query_newest(
         self,
@@ -221,7 +219,7 @@ class EventService:
         try:
             result = client._search(query)
         except requests.exceptions.RequestException as exc:
-            logger.warning("Indexer sorğusu uğursuz oldu: %s", type(exc).__name__)
+            logger.warning("Indexer request failed: %s", type(exc).__name__)
             raise IndexerUnavailable(friendly_error(exc)) from exc
 
         hits_obj = result.get("hits", {}) or {}
@@ -234,13 +232,14 @@ class EventService:
         for hit in hits:
             try:
                 ev = mapper(hit.get("_source", {}) or {})
-            except Exception:  # noqa: BLE001 - bir sənədin xətası bütün cavabı pozmasın
+            except Exception:  # noqa: BLE001 - no need to expose internal details to the user; just skip the event
+                logger.warning("Failed to map event: %s", hit.get("_id"))
                 skipped += 1
                 continue
             if ev is not None:
                 events.append(ev)
         if skipped:
-            logger.warning("%d sənəd map edilə bilmədi və atlandı", skipped)
+            logger.warning("%d events could not be mapped and were skipped", skipped)
         return events, total_value
 
     def _fetch(self, minutes: int, source: str) -> Dict[str, Any]:
@@ -277,11 +276,11 @@ class EventService:
             "generated_at": end,
         }
 
-    # ----- Ümumi API ----- #
+    # ----- General API ----- #
 
     def overview(self, minutes: int, source: str, limit: int) -> Dict[str, Any]:
         if source not in VALID_SOURCES:
-            raise ValueError(f"source {VALID_SOURCES} içindən olmalıdır")
+            raise ValueError(f"source {source} must be one of {VALID_SOURCES}")
 
         ttl = max(0, self.settings.api.cache_ttl_seconds)
         key = (minutes, source)
@@ -338,5 +337,5 @@ class EventService:
                 "version": (info.get("version") or {}).get("number"),
             }
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Indexer health check uğursuz: %s", type(exc).__name__)
+            logger.warning("Indexer health check failed: %s", type(exc).__name__)
             return {"ok": False, "detail": friendly_error(exc)}

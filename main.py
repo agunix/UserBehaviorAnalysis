@@ -1,12 +1,12 @@
 """
-AI-UBA :: giriş nöqtəsi
+UBA :: entry point
 -------------------------
-API + dashboard-u `config.yaml` / environment-dəki `api.host` və `api.port` ilə işə salır.
+API + dashboard `config.yaml` / runs in environment files `api.host` and `api.port`.
 
     python main.py                      # http://127.0.0.1:8088
-    AIUBA_API__PORT=9000 python main.py # fərqli port
+    UBA_API__PORT=9000 python main.py # different port
 
-Production-da bu fayl systemd vasitəsilə işə salınır (bax: deploy/aiuba.service).
+In the production environment this file is used to deploy the service of systemd 
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ def setup_logging(settings) -> None:
                 encoding="utf-8",
             )
         )
-    except OSError as exc:  # məs. fayl sistemi yalnız oxunandır - stdout/journald kifayətdir
-        print(f"Xəbərdarlıq: log faylı açıla bilmədi ({exc}); yalnız stdout istifadə olunur.", file=sys.stderr)
+    except OSError as exc:  # e.g. file system is read-only - stdout/journald only can be used
+        print(f"Warning: Could not open log file ({exc}); only stdout will be used.", file=sys.stderr)
     logging.basicConfig(
         level=getattr(logging, settings.logging.level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -45,9 +45,9 @@ def main() -> None:
     settings = get_settings()
     setup_logging(settings)
     api = settings.api
-    logging.getLogger("aiuba").info(
-        "AI-UBA başlayır: http://%s:%s (auth: %s)",
-        api.host, api.port, "aktiv" if api.basic_password else "söndürülüb",
+    logging.getLogger("uba").info(
+        "UBA starting: http://%s:%s (auth: %s)",
+        api.host, api.port, "active" if api.basic_password else "disabled",
     )
     uvicorn.run(
         "src.api.app:create_app",

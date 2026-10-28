@@ -1,4 +1,4 @@
-"""HTTP qatı testləri: autentifikasiya, parametr validasiyası, təhlükəsizlik header-ləri, UI."""
+"""HTTP layer tests: authentication, parameter validation, security headers, UI."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,7 +83,7 @@ def test_ui_served_and_asset_whitelist():
     c, _ = client()
     idx = c.get("/")
     assert idx.status_code == 200 and "text/html" in idx.headers["content-type"]
-    assert "/ui/app.js" in idx.text and "<script>" not in idx.text   # inline skript yoxdur
+    assert "/ui/app.js" in idx.text and "<script>" not in idx.text   # inline script is not allowed
     assert c.get("/ui/app.js").headers["content-type"].startswith("text/javascript")
     assert c.get("/ui/app.css").headers["content-type"].startswith("text/css")
     for name in ("index.html", "..%2f..%2fconfig.py", "../app.py", "secret.txt"):

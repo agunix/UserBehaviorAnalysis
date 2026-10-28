@@ -1,4 +1,4 @@
-"""EventService + build_summary testləri (Wazuh Indexer saxta klientlərlə əvəz olunur)."""
+"""EventService + build_summary tests (Wazuh Indexer replaces with fake clients)."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -11,7 +11,7 @@ from src.config.config import ApiSettings, Settings
 
 def _ts(minutes_ago: int) -> str:
     dt = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.000+0000")  # Wazuh formatı
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.000+0000")  # Wazuh formats
 
 
 def linux_alert(minutes_ago, groups, user="ubuntu", ip=None, rule_id="5710"):
@@ -146,7 +146,7 @@ def test_indexer_errors_become_safe_messages(exc, fragment):
     with pytest.raises(IndexerUnavailable) as info:
         svc.overview(60, "linux", 10)
     assert fragment in str(info.value)
-    assert "10.1.2.3" not in str(info.value)   # host/detal sızmasın
+    assert "10.1.2.3" not in str(info.value)   # host/detal penetration info should not leak to user
 
 
 def test_http_401_message():

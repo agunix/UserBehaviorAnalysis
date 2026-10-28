@@ -1,58 +1,57 @@
 <!--
-  AI-UBA Alert Loopback :: Manager Custom Rules
+  UBA Alert Loopback :: Manager Custom Rules
   =================================================
-  Bu faylı Wazuh MANAGER-də /var/ossec/etc/rules/local_rules.xml-ə əlavə edin.
+  Add this file to /var/ossec/etc/rules/local_rules.xml on the Wazuh MANAGER.
 
-  Qeyd: Wazuh-un daxili JSON decoder-i (log_format=json ilə gələn) sahələri
-  avtomatik `data.*` altında çıxarır, ona görə AYRICA custom decoder YAZMAĞA
-  EHTİYAC YOXDUR - birbaşa rule yazmaq kifayətdir.
+  Note: Wazuh's built-in JSON decoder (used with `log_format=json`) automatically
+   extracts fields under `data.*`, so there is NO NEED to write a separate custom decoder — writing a rule directly is sufficient.
 
-  Tətbiq etdikdən sonra manager-i restart edin:
-    systemctl restart wazuh-manager
+  After applying, restart the manager:
+  systemctl restart wazuh-manager
 
-  Test üçün:
+  For test:
     /var/ossec/bin/wazuh-logtest
-    (və ya) echo '{"source":"AI-UBA","severity":"high",...}' faylına yazıb
-    /var/ossec/logs/alerts/alerts.json-da nəticəni yoxlayın.
+    (or) write '{"source":"UBA","severity":"high",...}' to a file and
+    check the result in /var/ossec/logs/alerts/alerts.json.
 -->
-<group name="aiuba,user_behavior_analytics,">
+<group name="uba,user_behavior_analytics,">
 
-  <!-- Baza qaydası: bütün AI-UBA mənşəli event-ləri tanı (özü alert yaratmır, yalnız əsasdır) -->
+  <!-- Base rule: recognize all events originating from UBA (does not create alerts itself; serves only as a foundation) -->
   <rule id="100200" level="0">
-    <field name="source">AI-UBA</field>
-    <description>AI-UBA: user behavior anomaly event alındı</description>
+    <field name="source">UBA</field>
+    <description>UBA: user behavior anomaly event received</description>
     <options>no_full_log</options>
   </rule>
 
-  <!-- Aşağı risk -->
+  <!-- Low risk -->
   <rule id="100201" level="5">
     <if_sid>100200</if_sid>
     <field name="severity">low</field>
-    <description>AI-UBA: Aşağı risk davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <description>UBA: Low risk behavior anomaly - $(data.rule_name) - user $(data.user)</description>
     <group>low_risk,</group>
   </rule>
 
-  <!-- Orta risk -->
+  <!-- Medium risk -->
   <rule id="100202" level="8">
     <if_sid>100200</if_sid>
     <field name="severity">medium</field>
-    <description>AI-UBA: Orta risk davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <description>UBA: Medium risk behavior anomaly - $(data.rule_name) - user $(data.user)</description>
     <group>medium_risk,</group>
   </rule>
 
-  <!-- Yüksək risk -->
+  <!-- High risk -->
   <rule id="100203" level="12">
     <if_sid>100200</if_sid>
     <field name="severity">high</field>
-    <description>AI-UBA: Yüksək risk davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <description>UBA: High risk behavior anomaly - $(data.rule_name) - user $(data.user)</description>
     <group>high_risk,gdpr_IV_35.7.d,</group>
   </rule>
 
-  <!-- Kritik risk (məs: data exfiltration şübhəsi) -->
+  <!-- Critical risk (e.g., data exfiltration suspicion) -->
   <rule id="100204" level="15">
     <if_sid>100200</if_sid>
     <field name="severity">critical</field>
-    <description>AI-UBA: KRİTİK davranış anomaliyası - $(data.rule_name) - istifadəçi $(data.user)</description>
+    <description>UBA: Critical behavior anomaly - $(data.rule_name) - user $(data.user)</description>
     <group>critical_risk,gdpr_IV_35.7.d,</group>
   </rule>
 

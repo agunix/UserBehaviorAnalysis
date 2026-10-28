@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="az">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>AI-UBA</title>
+  <title>UBA</title>
   <link rel="stylesheet" href="/ui/app.css">
 </head>
 <body>
@@ -12,40 +12,40 @@
     <div class="brand">
       <span class="logo" aria-hidden="true">◈</span>
       <div>
-        <h1>AI-UBA</h1>
+        <h1>UBA</h1>
         <p class="subtitle">User Behavior Analytics</p>
       </div>
     </div>
 
     <div class="controls">
       <label class="field">
-        <span>Pəncərə</span>
+        <span>Window</span>
         <select id="sel-window">
-          <option value="15">Son 15 dəq</option>
-          <option value="60" selected>Son 1 saat</option>
-          <option value="360">Son 6 saat</option>
-          <option value="1440">Son 24 saat</option>
-          <option value="10080">Son 7 gün</option>
+          <option value="15">Last 15 min</option>
+          <option value="60" selected>Last 1 hour</option>
+          <option value="360">Last 6 hours</option>
+          <option value="1440">Last 24 hours</option>
+          <option value="10080">Last 7 days</option>
         </select>
       </label>
       <label class="field">
-        <span>Mənbə</span>
+        <span>Source</span>
         <select id="sel-source">
-          <option value="all" selected>Hamısı</option>
+          <option value="all" selected>All</option>
           <option value="windows">Windows</option>
           <option value="linux">Linux</option>
         </select>
       </label>
       <label class="check">
         <input type="checkbox" id="chk-auto" checked>
-        <span>Avto-yenilə (15 san)</span>
+        <span>Auto-refresh (15 sec)</span>
       </label>
-      <button type="button" id="btn-refresh">Yenilə</button>
+      <button type="button" id="btn-refresh">Refresh</button>
     </div>
 
     <div class="status" role="status" aria-live="polite">
       <span id="status-dot" class="dot dot-load"></span>
-      <span id="status-text">Yüklənir…</span>
+      <span id="status-text">Loading…</span>
       <span id="updated" class="muted"></span>
     </div>
   </header>
@@ -53,43 +53,43 @@
   <main>
     <div id="banner" class="banner" hidden></div>
 
-    <section class="kpis" aria-label="Əsas göstəricilər">
+    <section class="kpis" aria-label="Main metrics">
       <article class="card kpi"><h2>Event</h2><p class="num" id="kpi-total">–</p><p class="muted" id="kpi-sources"></p></article>
-      <article class="card kpi kpi-bad"><h2>Uğursuz giriş</h2><p class="num" id="kpi-fail">–</p><p class="muted">Windows 4625 + Linux auth failed</p></article>
-      <article class="card kpi"><h2>İstifadəçi</h2><p class="num" id="kpi-users">–</p><p class="muted">unikal</p></article>
-      <article class="card kpi"><h2>Mənbə IP</h2><p class="num" id="kpi-ips">–</p><p class="muted">unikal</p></article>
+      <article class="card kpi kpi-bad"><h2>Failed Login</h2><p class="num" id="kpi-fail">–</p><p class="muted">Windows 4625 + Linux auth failed</p></article>
+      <article class="card kpi"><h2>User</h2><p class="num" id="kpi-users">–</p><p class="muted">unique</p></article>
+      <article class="card kpi"><h2>Source IP</h2><p class="num" id="kpi-ips">–</p><p class="muted">unique</p></article>
     </section>
 
     <section class="grid-2">
       <article class="card">
-        <h2>Zaman üzrə aktivlik</h2>
-        <div id="timeline" class="timeline" role="img" aria-label="Zaman üzrə event sayı"></div>
+        <h2>Activity by Time</h2>
+        <div id="timeline" class="timeline" role="img" aria-label="Event count by time"></div>
         <div id="timeline-axis" class="axis"></div>
-        <p class="legend"><span class="sw sw-ok"></span> Event <span class="sw sw-bad"></span> Uğursuz giriş</p>
+        <p class="legend"><span class="sw sw-ok"></span> Event <span class="sw sw-bad"></span> Failed Login</p>
       </article>
       <article class="card">
-        <h2>Kateqoriyalar</h2>
+        <h2>Categories</h2>
         <div id="categories" class="bars"></div>
       </article>
     </section>
 
     <section class="grid-3">
-      <article class="card"><h2>Top istifadəçilər</h2><div id="top-users" class="bars"></div></article>
-      <article class="card"><h2>Top mənbə IP</h2><div id="top-ips" class="bars"></div></article>
-      <article class="card"><h2>Top hostlar</h2><div id="top-hosts" class="bars"></div></article>
+      <article class="card"><h2>Top Users</h2><div id="top-users" class="bars"></div></article>
+      <article class="card"><h2>Top Source IPs</h2><div id="top-ips" class="bars"></div></article>
+      <article class="card"><h2>Top Hosts</h2><div id="top-hosts" class="bars"></div></article>
     </section>
 
     <section class="card">
       <div class="table-head">
-        <h2>Son event-lər <span id="events-count" class="muted"></span></h2>
-        <input type="search" id="search" placeholder="Filtr: istifadəçi, IP, proses, fayl…" aria-label="Event filtri" autocomplete="off">
+        <h2>Recent Events <span id="events-count" class="muted"></span></h2>
+        <input type="search" id="search" placeholder="Filter: user, IP, process, file…" aria-label="Event filter" autocomplete="off">
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Vaxt</th><th>Mənbə</th><th>Kateqoriya</th><th>Event</th>
-              <th>İstifadəçi</th><th>Mənbə IP</th><th>Detal</th><th>Host</th>
+              <th>Time</th><th>Source</th><th>Category</th><th>Event</th>
+              <th>User</th><th>Source IP</th><th>Detail</th><th>Host</th>
             </tr>
           </thead>
           <tbody id="events-body"></tbody>
@@ -98,7 +98,7 @@
     </section>
   </main>
 
-  <footer class="muted">AI-UBA · risk skorları (ML + rule) növbəti mərhələdə əlavə olunacaq</footer>
+  <footer class="muted">UBA · risk scores (ML + rule) next level will be added</footer>
   <script src="/ui/app.js" defer></script>
 </body>
 </html>

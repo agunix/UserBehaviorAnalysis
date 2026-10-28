@@ -1,1 +1,1 @@
-# risk modulu - hele inkishaf merhelesindedir (bax: ROADMAP.md)
+# risk module - on development (see: ROADMAP.md)

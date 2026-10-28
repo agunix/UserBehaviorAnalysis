@@ -1,11 +1,11 @@
-# AI-UBA konfiqurasiya faylı
-# Environment variable ilə override etmək üçün: AIUBA_<SECTION>__<KEY>
-# Məsələn: AIUBA_PARSER__MODE=live
+# UBA configuration file
+# Override for Environment variable: UBA_<SECTION>__<KEY>
+# Məsələn: UBA_PARSER__MODE=live
 
 environment: development
 
 parser:
-  mode: offline              # "offline" (EVTX fayllarından) və ya "live" (real-vaxt Windows API)
+  mode: offline              # "offline" (from EVTX files) or "live" (real-TIME Windows API)
   channels:
     - "Security"
     - "Microsoft-Windows-Sysmon/Operational"
@@ -28,15 +28,15 @@ logging:
   backup_count: 5
 
 wazuh_indexer:
-  host: "127.0.0.1"       # Wazuh Indexer/manager IP-si
+  host: "127.0.0.1"       # Wazuh Indexer/manager IP
   port: 9200
   username: "admin"
-  password: ""            # BURAYA YAZMA! export AIUBA_WAZUH_INDEXER__PASSWORD=... istifadə et
-  verify_ssl: false        # self-signed sertifikatla test üçün false, production-da true
+  password: ""            # DO NOT WRITE PASSWORD HERE! export UBA_WAZUH_INDEXER__PASSWORD=... use
+  verify_ssl: false        # false for test with self-signed certificate, true in production
   index_pattern: "wazuh-alerts-*"
 
 wazuh_alert_output:
-  output_file: "data/aiuba_alerts/aiuba_events.json"
+  output_file: "data/uba_alerts/uba_events.json"
 
 risk:
   rule_weight: 0.6

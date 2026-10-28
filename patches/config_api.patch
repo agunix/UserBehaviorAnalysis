@@ -6,18 +6,30 @@
  
 +class ApiSettings(BaseModel):
 +    """
-+    AI-UBA API + dashboard (FastAPI/uvicorn) ayarları.
-+    Defolt olaraq yalnız localhost-a bind olunur. Şəbəkəyə açmaq istəyirsinizsə
-+    mütləq basic_password təyin edin və TLS üçün reverse proxy istifadə edin.
-+    Env nümunəsi: AIUBA_API__PORT=8088, AIUBA_API__BASIC_PASSWORD=...
++    UBA API + dashboard (FastAPI/uvicorn) configs.
++    By default, only binds to localhost. If you want to expose it to the network,
++    you must set a basic_password and use a reverse proxy for TLS.
++    Env example: UBA_API__PORT=8088, UBA_API__BASIC_PASSWORD=...
 +    """
 +
 +    host: str = "127.0.0.1"
 +    port: int = 8088
 +    basic_user: str = "admin"
-+    basic_password: str = ""          # boşdursa autentifikasiya söndürülüb
-+    cache_ttl_seconds: int = 15       # eyni sorğular üçün Indexer-ə təkrar müraciəti məhdudlaşdırır
-+    max_events_per_source: int = 5000  # bir sorğuda mənbə başına maksimum event (<= 10000)
++    basic_password: str = ""          # if empty, no basic auth is used (not recommended for public networks)
++    log_level: str = "info"           # debug, info, warning, error
++    log_format: str = "text"          # text, json
++    log_file: Optional[Path] = None   # if set, logs are written to this file instead of stdout
++    log_max_bytes: int = 10 * 1024 * 1024  # 10 MB
++    log_backup_count: int = 5
++    log_rotate_when: str = "midnight"  # when to rotate
++    log_rotate_interval: int = 1       # how many intervals to wait before rotating
++    log_rotate_suffix: str = "%Y-%m-%d"  # suffix for rotated log files
++    log_rotate_utc: bool = True        # use UTC for log rotation
++    log_rotate_delay: bool = True      # delay file rotation until the next log
++    log_rotate_encoding: Optional[str] = "utf-8"  # encoding for rotated log files
++    log_rotate_compress: bool = True   # compress rotated log files
++    cache_ttl_seconds: int = 15       # for dashboard, cache the last 15 seconds of events to reduce load on Wazuh API
++    max_events_per_source: int = 5000  # max events per source (<= 10000)
 +
 +
  class RiskSettings(BaseModel):

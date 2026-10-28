@@ -1,36 +1,33 @@
 """
-AI-UBA :: Linux Integration (Wazuh)
+UBA :: Linux Integration (Wazuh)
 --------------------------------------
-`wazuh_client.py` ilə eyni məqsədə xidmət edir (Wazuh Indexer-dən alert çəkib
-UserBehaviorEvent-ə normallaşdırmaq), lakin Linux mənbələri Windows-dan
-STRUKTURCA fərqlidir, ona görə ayrı fayldır:
+It serves the same purpose as `wazuh_client.py` (fetching alerts from the Wazuh Indexer
+and normalizing them into `UserBehaviorEvent`s); however, since Linux sources differ
+structurally from Windows sources, a separate file is used:
 
-  - Windows/Sysmon: hər event-in ədədi bir `EventID`-si var (1, 4624, 4688...),
-    filtrasiya bunun üzərindən aparılır.
-  - Linux mənbələri (sshd/PAM, auditd, syscheck) belə vahid ID sxeminə malik
-    deyil. Bunun əvəzinə Wazuh-un öz `rule.groups` təsnifatı istifadə olunur
-    (məs: "sshd", "audit_command", "syscheck").
+  - Windows/Sysmon: There are unique 'EVENT_ID' for every event (1, 4624, 4688...),
+    filtration is performed based on this.
+  - Linux sources (sshd/PAM, auditd, syscheck) do not have a unified ID schema.
+    Instead, the Wazuh's own `rule.groups` classification is used
+    (e.g., "sshd", "audit_command", "syscheck").
 
-Əhatə olunan 3 mənbə və Wazuh-dakı xam sahə yerləri:
+The 3 covered sources and raw field locations in Wazuh alerts are:
 
   1. SSH/PAM autentifikasiya  -> data.srcip, data.srcuser, data.dstuser
   2. Auditd (proses/syscall)  -> data.audit.* (exe, command, uid, euid,
                                   syscall, key, execve.a0..aN)
-  3. Syscheck (FIM)           -> syscheck.* (DİQQƏT: `data` altında DEYİL,
-                                  sənəddə top-level sahədir)
+  3. Syscheck (FIM)           -> syscheck.* (WARNING: DO NOT PLACE UNDER `data`,
+                                  it is a top-level field)
 
-QEYD (dəqiqlik üçün şəffaflıq): auditd sahələrinin `data.audit.*` altında
-olması Windows-dakı `data.win.*` konvensiyasına əsaslanan MƏNTİQİ fərziyyədir
-və Wazuh-un rəsmi sənədləşməsindəki nümunələrlə üst-üstə düşür, lakin sizin
-konkret Wazuh versiyanızda kiçik fərqlər ola bilər. Ona görə aşağıdakı
-`_extract_audit_fields` funksiyası HƏM `data.audit`, HƏM DƏ (ehtiyat üçün)
-sənədin kökündəki `audit` açarını yoxlayır. İlk real testdən sonra
-`python -m src.integrations.linux_client --debug` ilə xam JSON-u çap edib
-təsdiqləyin; uyğunsuzluq olarsa mənə göndərin, mapping-i dəqiqləşdirərik.
+NOTE: auditd fields `data.audit.*` below are a LOGICAL assumption based on the `data.win.*` convention in Windows
+and match the examples in Wazuh's official documentation, but there may be slight differences in your specific 
+Wazuh version. Therefore, the `_extract_audit_fields` function checks BOTH `data.audit` AND (as a precaution) 
+the root-level `audit` key. After the first real test, run `python -m src.integrations.linux_client --debug` 
+to print the raw JSON and verify; if there is a mismatch, send it to me and we will clarify the mapping.
 
-İstifadə:
+Example usage (CLI):
     from src.integrations.linux_client import LinuxWazuhClient
-    from src.integrations.wazuh_client import WazuhAlertWriter  # eyni loopback
+    from src.integrations.wazuh_client import WazuhAlertWriter  # same loopback
 
     client = LinuxWazuhClient()
     for event in client.fetch_recent_events(minutes=60):
@@ -62,7 +59,7 @@ except ImportError:
 
 
 # --------------------------------------------------------------------------- #
-# Köməkçi: case-insensitive dict axtarışı (wazuh_client.py-dəki ilə eynidir)
+# Helper: case-insensitive dict search (same with wazuh_client.py)
 # --------------------------------------------------------------------------- #
 
 def _ci_get(d: Dict[str, Any], *keys: str) -> Optional[Any]:
@@ -77,11 +74,11 @@ def _ci_get(d: Dict[str, Any], *keys: str) -> Optional[Any]:
 
 
 # --------------------------------------------------------------------------- #
-# rule.groups -> (event_name, category) təsnifatı
+# rule.groups -> (event_name, category) classification mapping
 # --------------------------------------------------------------------------- #
 
 _GROUP_METADATA: List[tuple] = [
-    # (qrup adı, event_name, category) - sıra vacibdir, ilk uyğunluq qalib gəlir
+    # (group name, event_name, category) - consequence important, first match wins
     ("authentication_failed", "LinuxLoginFailure", "auth"),
     ("authentication_success", "LinuxLoginSuccess", "auth"),
     ("sshd", "SshdEvent", "auth"),
@@ -101,18 +98,18 @@ def _classify_by_groups(groups: List[str]) -> tuple:
 
 
 # --------------------------------------------------------------------------- #
-# Sahə çıxarıcıları (mənbəyə görə)
+# Field extractors (based on source category)
 # --------------------------------------------------------------------------- #
 
 def _extract_auth_fields(data: Dict[str, Any]) -> Dict[str, Any]:
-    """SSH/PAM auth alert-lərindən: data.srcip, data.srcuser, data.dstuser."""
+    """From SSH/PAM auth alerts: data.srcip, data.srcuser, data.dstuser."""
     fields = {}
     src_ip = _ci_get(data, "srcip")
     src_user = _ci_get(data, "srcuser")
     dst_user = _ci_get(data, "dstuser")
     if src_ip:
         fields["source_ip"] = src_ip
-    # dstuser adətən hədəf hesabdır (kimə giriş edilib) - user sahəsi kimi saxlayırıq
+    # dstuser sometimes target account (who logged in) - store as "user"; if not present, fallback to srcuser (who attempted login)
     if dst_user:
         fields["user"] = dst_user
     elif src_user:
@@ -122,8 +119,8 @@ def _extract_auth_fields(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _extract_audit_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Auditd alert-lərindən process/command məlumatı.
-    Həm `data.audit.*`, həm ehtiyat olaraq kökdəki `audit.*` yoxlanılır.
+    From Auditd alerts: process/command information.
+    Both `data.audit.*` and the fallback `audit.*` at the root level are checked.
     """
     audit = data.get("audit") if isinstance(data.get("audit"), dict) else {}
     fields = {}
@@ -139,7 +136,7 @@ def _extract_audit_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     if command:
         fields["command_line"] = command
     elif exe:
-        # command sahəsi yoxdursa, execve.a0..aN-dən CLI-ni yenidən qurmağa çalış
+        # if there are no any command field, try to construct CLI from execve.a0..aN
         argv = []
         i = 0
         while True:
@@ -153,16 +150,16 @@ def _extract_audit_fields(data: Dict[str, Any]) -> Dict[str, Any]:
 
     user_id = uid or euid
     if user_id:
-        fields["user"] = str(user_id)  # ehtiyat: UID rəqəmi, username-ə çevirmək lazım gələ bilər
+        fields["user"] = str(user_id)  # backup: UID digit, it may be turned into username
     if syscall_key:
-        fields["target_object"] = syscall_key  # audit "key" - hansı qaydaya uyğun gəldiyi
+        fields["target_object"] = syscall_key  # audit "key" - which rule it matches
 
     return fields
 
 
 def _extract_syscheck_fields(alert: Dict[str, Any]) -> Dict[str, Any]:
     """
-    FIM alert-lərindən: `alert["syscheck"]` (top-level, `data` altında DEYİL).
+    From FIM alerts: `alert["syscheck"]` (top-level, not under `data`).
     """
     syscheck = alert.get("syscheck", {}) or {}
     fields = {}
@@ -181,27 +178,27 @@ def _extract_syscheck_fields(alert: Dict[str, Any]) -> Dict[str, Any]:
         fields["user"] = str(uid_after)
 
     if event_type:
-        # raw-a əlavə ediləcək, sxemdə xüsusi sahə yoxdur
+        # there are no any specific fields for syscheck events, so we'll use a generic approach
         fields.setdefault("_syscheck_event_type", event_type)
 
     return fields
 
 
 # --------------------------------------------------------------------------- #
-# Əsas mapper: Wazuh alert -> UserBehaviorEvent
+# Main mapper: Wazuh alert -> UserBehaviorEvent
 # --------------------------------------------------------------------------- #
 
 def linux_alert_to_user_behavior_event(alert: Dict[str, Any]) -> Optional[UserBehaviorEvent]:
     """
-    Linux mənşəli (sshd/PAM/auditd/syscheck) bir Wazuh alert sənədini
-    `UserBehaviorEvent`-ə çevirir. Tanınmayan mənbə üçün None qaytarır.
+    Converts a Linux source (sshd/PAM/auditd/syscheck) Wazuh alert document
+    to a `UserBehaviorEvent`. Returns None for unknown sources.
     """
     rule = alert.get("rule", {}) or {}
     groups = rule.get("groups", []) or []
     event_name, category = _classify_by_groups(groups)
 
     if category == "uncategorized":
-        return None  # bizim izlədiyimiz Linux mənbələrindən deyil
+        return None  # not one of our targeted Linux sources
 
     data = alert.get("data", {}) or {}
 
@@ -236,17 +233,15 @@ def linux_alert_to_user_behavior_event(alert: Dict[str, Any]) -> Optional[UserBe
 
 
 # --------------------------------------------------------------------------- #
-# LinuxWazuhClient - Indexer sorğusu (rule.groups filteri ilə)
+# LinuxWazuhClient - Indexer requests (rule.groups-based)
 # --------------------------------------------------------------------------- #
 
 class LinuxWazuhClient:
     """
-    `WazuhIndexerClient`-dən (wazuh_client.py) fərqli olaraq, filtri
-    `data.win.system.eventID` yox, `rule.groups` üzərindən aparır.
-    Auth (basic), host/port/index_pattern konfiqurasiyası eynidir
-    (`config.yaml`-dakı `wazuh_indexer` bölməsi paylaşılır).
+    From difference of `WazuhIndexerClient` (wazuh_client.py), not `data.win.system.eventID` but `rule.groups` is used for classification.
+    Auth (basic), host/port/index_pattern configuration is the same (shared from `config.yaml`'s `wazuh_indexer` section).
     """
-
+   
     def __init__(self, settings=None):
         self.settings = settings or get_settings()
         self.cfg = self.settings.wazuh_indexer
@@ -290,7 +285,7 @@ class LinuxWazuhClient:
 
         result = self._search(query)
         hits = result.get("hits", {}).get("hits", [])
-        logger.info("Wazuh indexer-dən %d Linux alert alındı (son %d dəq)", len(hits), minutes)
+        logger.info("From Wazuh indexer recieved %d Linux alert (last %d mins)", len(hits), minutes)
 
         for hit in hits:
             event = linux_alert_to_user_behavior_event(hit.get("_source", {}))
@@ -336,7 +331,7 @@ class LinuxWazuhClient:
 
 
 # --------------------------------------------------------------------------- #
-# CLI test giriş nöqtəsi
+# CLI test entrypoint (for debugging)
 # --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
@@ -351,12 +346,12 @@ if __name__ == "__main__":
         count += 1
         if count <= 5:
             print(evt.model_dump_json(indent=2))
-    print(f"\nCəmi normallaşdırılan Linux event: {count}")
+    print(f"\nTotal normalized Linux events: {count}")
 
     if debug and count == 0:
         print(
-            "\nHeç bir event tapılmadı. --debug: raw alert strukturunu yoxlamaq üçün "
-            "birbaşa curl ilə sorğu göndərib nəticəni mənə göndərin:\n"
+            "\nNo events found. --debug: To inspect the raw alert structure, "
+            "execute the following curl command and share the result:\n"
             "  curl -k -u <user>:<pass> "
             "'https://127.0.0.1:9200/wazuh-alerts-*/_search?size=1' "
             "-H 'Content-Type: application/json' "
